@@ -1,0 +1,607 @@
+import { db } from "./db";
+import { eq, sql, and, or, gte, desc } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import {
+  animals,
+  properties,
+  fields,
+  movements,
+  vaccinations,
+  events,
+  calvingRecords,
+  slaughterRecords,
+  users,
+  type Animal,
+  type InsertAnimal,
+  type Property,
+  type InsertProperty,
+  type Field,
+  type InsertField,
+  type Movement,
+  type InsertMovement,
+  type Vaccination,
+  type InsertVaccination,
+  type Event,
+  type InsertEvent,
+  type CalvingRecord,
+  type InsertCalvingRecord,
+  type SlaughterRecord,
+  type InsertSlaughterRecord,
+  type User,
+} from "@shared/schema";
+
+export interface IStorage {
+  // Animals
+  createAnimal(animal: InsertAnimal): Promise<Animal>;
+  getAllAnimals(): Promise<Animal[]>;
+  getAnimalById(id: string): Promise<Animal | undefined>;
+  updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined>;
+  deleteAnimal(id: string): Promise<void>;
+  getAnimalsReadyToBreed(): Promise<Animal[]>;
+  getOffspringByParentId(parentId: string): Promise<Animal[]>;
+
+  // Properties
+  createProperty(property: InsertProperty): Promise<Property>;
+  getAllProperties(): Promise<Property[]>;
+  getPropertyById(id: string): Promise<Property | undefined>;
+  updateProperty(id: string, property: Partial<InsertProperty>): Promise<Property | undefined>;
+  deleteProperty(id: string): Promise<void>;
+
+  // Fields
+  createField(field: InsertField): Promise<Field>;
+  getAllFields(): Promise<Field[]>;
+  getFieldById(id: string): Promise<Field | undefined>;
+  getFieldsByPropertyId(propertyId: string): Promise<Field[]>;
+  updateField(id: string, field: Partial<InsertField>): Promise<Field | undefined>;
+  deleteField(id: string): Promise<void>;
+  getCurrentAnimalCountByField(): Promise<{ property: string; dairy: number; beef: number }[]>;
+
+  // Movements
+  createMovement(movement: InsertMovement): Promise<Movement>;
+  getMovementsByAnimalId(animalId: string): Promise<Movement[]>;
+  getRecentMovements(limit?: number): Promise<Movement[]>;
+
+  // Vaccinations
+  createVaccination(vaccination: InsertVaccination): Promise<Vaccination>;
+  getVaccinationsByAnimalId(animalId: string): Promise<Vaccination[]>;
+  updateVaccination(id: string, vaccination: Partial<InsertVaccination>): Promise<Vaccination | undefined>;
+  deleteVaccination(id: string): Promise<void>;
+
+  // Events
+  createEvent(event: InsertEvent): Promise<Event>;
+  getEventsByAnimalId(animalId: string): Promise<Event[]>;
+  updateEvent(id: string, event: Partial<InsertEvent>): Promise<Event | undefined>;
+  deleteEvent(id: string): Promise<void>;
+
+  // Calving Records
+  createCalvingRecord(record: InsertCalvingRecord): Promise<CalvingRecord>;
+  getCalvingRecordsByDamId(damId: string): Promise<CalvingRecord[]>;
+  updateCalvingRecord(id: string, record: Partial<InsertCalvingRecord>): Promise<CalvingRecord | undefined>;
+  deleteCalvingRecord(id: string): Promise<void>;
+
+  // Slaughter Records
+  createSlaughterRecord(record: InsertSlaughterRecord): Promise<SlaughterRecord>;
+  getAllSlaughterRecords(): Promise<SlaughterRecord[]>;
+  getSlaughterRecordById(id: string): Promise<SlaughterRecord | undefined>;
+  deleteSlaughterRecord(id: string): Promise<void>;
+
+  // Bulk Import
+  bulkCreateAnimals(animals: InsertAnimal[]): Promise<Animal[]>;
+  bulkCreateProperties(properties: InsertProperty[]): Promise<Property[]>;
+  bulkCreateFields(fields: InsertField[]): Promise<Field[]>;
+  bulkCreateVaccinations(vaccinations: InsertVaccination[]): Promise<Vaccination[]>;
+  bulkCreateEvents(events: InsertEvent[]): Promise<Event[]>;
+  bulkCreateCalvingRecords(records: InsertCalvingRecord[]): Promise<CalvingRecord[]>;
+  bulkCreateSlaughterRecords(records: InsertSlaughterRecord[]): Promise<SlaughterRecord[]>;
+
+  // Lookup helpers for imports
+  getAnimalByTagNumber(tagNumber: string): Promise<Animal | undefined>;
+  getPropertyByName(name: string): Promise<Property | undefined>;
+  getFieldByNameAndProperty(fieldName: string, propertyId: string): Promise<Field | undefined>;
+
+  // User operations for authentication
+  getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: { email: string; passwordHash: string; firstName?: string; lastName?: string; isAdmin?: string }): Promise<User>;
+  getAllUsers(): Promise<User[]>;
+  updateUserAdminStatus(id: string, isAdmin: string): Promise<User | undefined>;
+  updateUserPassword(id: string, passwordHash: string): Promise<User | undefined>;
+  setPasswordResetToken(email: string, token: string, expires: Date): Promise<User | undefined>;
+  getUserByResetToken(token: string): Promise<User | undefined>;
+  clearPasswordResetToken(id: string): Promise<User | undefined>;
+}
+
+export class DatabaseStorage implements IStorage {
+  // Animals
+  async createAnimal(animal: InsertAnimal): Promise<Animal> {
+    const [newAnimal] = await db.insert(animals).values(animal).returning();
+    return newAnimal;
+  }
+
+  async getAllAnimals(): Promise<Animal[]> {
+    const sireAnimals = alias(animals, 'sire_animals');
+    const damAnimals = alias(animals, 'dam_animals');
+    
+    const result = await db
+      .select({
+        id: animals.id,
+        tagNumber: animals.tagNumber,
+        name: animals.name,
+        type: animals.type,
+        sex: animals.sex,
+        dateOfBirth: animals.dateOfBirth,
+        breedingMethod: animals.breedingMethod,
+        sireId: animals.sireId,
+        damId: animals.damId,
+        currentFieldId: animals.currentFieldId,
+        createdAt: animals.createdAt,
+        currentFieldName: fields.name,
+        sireTagNumber: sireAnimals.tagNumber,
+        damTagNumber: damAnimals.tagNumber,
+      })
+      .from(animals)
+      .leftJoin(fields, eq(animals.currentFieldId, fields.id))
+      .leftJoin(sireAnimals, eq(animals.sireId, sireAnimals.id))
+      .leftJoin(damAnimals, eq(animals.damId, damAnimals.id));
+    
+    return result as Animal[];
+  }
+
+  async getAnimalById(id: string): Promise<Animal | undefined> {
+    const [animal] = await db.select().from(animals).where(eq(animals.id, id));
+    return animal;
+  }
+
+  async updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined> {
+    const [updated] = await db
+      .update(animals)
+      .set(animal)
+      .where(eq(animals.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteAnimal(id: string): Promise<void> {
+    await db.delete(animals).where(eq(animals.id, id));
+  }
+
+  async getAnimalsReadyToBreed(): Promise<Animal[]> {
+    const fiftySevenDaysAgo = new Date();
+    fiftySevenDaysAgo.setDate(fiftySevenDaysAgo.getDate() - 57);
+
+    const result = await db
+      .select({
+        id: animals.id,
+        tagNumber: animals.tagNumber,
+        name: animals.name,
+        type: animals.type,
+        sex: animals.sex,
+        dateOfBirth: animals.dateOfBirth,
+        breedingMethod: animals.breedingMethod,
+        sireId: animals.sireId,
+        damId: animals.damId,
+        currentFieldId: animals.currentFieldId,
+        createdAt: animals.createdAt,
+      })
+      .from(animals)
+      .leftJoin(calvingRecords, eq(animals.id, calvingRecords.damId))
+      .where(
+        and(
+          eq(animals.sex, "Female"),
+          sql`${calvingRecords.calvingDate} <= ${fiftySevenDaysAgo.toISOString().split('T')[0]}`
+        )
+      )
+      .groupBy(animals.id);
+
+    return result;
+  }
+
+  async getOffspringByParentId(parentId: string): Promise<Animal[]> {
+    const result = await db
+      .select({
+        id: animals.id,
+        tagNumber: animals.tagNumber,
+        name: animals.name,
+        type: animals.type,
+        sex: animals.sex,
+        dateOfBirth: animals.dateOfBirth,
+        breedingMethod: animals.breedingMethod,
+        sireId: animals.sireId,
+        damId: animals.damId,
+        currentFieldId: animals.currentFieldId,
+        createdAt: animals.createdAt,
+        currentFieldName: fields.name,
+      })
+      .from(animals)
+      .leftJoin(fields, eq(animals.currentFieldId, fields.id))
+      .where(
+        or(
+          eq(animals.sireId, parentId),
+          eq(animals.damId, parentId)
+        )
+      );
+    
+    return result as Animal[];
+  }
+
+  // Properties
+  async createProperty(property: InsertProperty): Promise<Property> {
+    const [newProperty] = await db.insert(properties).values(property).returning();
+    return newProperty;
+  }
+
+  async getAllProperties(): Promise<Property[]> {
+    return await db.select().from(properties);
+  }
+
+  async getPropertyById(id: string): Promise<Property | undefined> {
+    const [property] = await db.select().from(properties).where(eq(properties.id, id));
+    return property;
+  }
+
+  async updateProperty(id: string, property: Partial<InsertProperty>): Promise<Property | undefined> {
+    const [updated] = await db
+      .update(properties)
+      .set(property)
+      .where(eq(properties.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProperty(id: string): Promise<void> {
+    await db.delete(properties).where(eq(properties.id, id));
+  }
+
+  // Fields
+  async createField(field: InsertField): Promise<Field> {
+    const [newField] = await db.insert(fields).values(field).returning();
+    return newField;
+  }
+
+  async getAllFields(): Promise<Field[]> {
+    return await db.select().from(fields);
+  }
+
+  async getFieldById(id: string): Promise<Field | undefined> {
+    const [field] = await db.select().from(fields).where(eq(fields.id, id));
+    return field;
+  }
+
+  async getFieldsByPropertyId(propertyId: string): Promise<Field[]> {
+    return await db.select().from(fields).where(eq(fields.propertyId, propertyId));
+  }
+
+  async updateField(id: string, field: Partial<InsertField>): Promise<Field | undefined> {
+    const [updated] = await db
+      .update(fields)
+      .set(field)
+      .where(eq(fields.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteField(id: string): Promise<void> {
+    await db.delete(fields).where(eq(fields.id, id));
+  }
+
+  async getCurrentAnimalCountByField(): Promise<{ property: string; dairy: number; beef: number }[]> {
+    const result = await db
+      .select({
+        property: properties.name,
+        dairy: sql<number>`count(case when ${animals.type} = 'dairy' then 1 end)::int`,
+        beef: sql<number>`count(case when ${animals.type} = 'beef' then 1 end)::int`,
+      })
+      .from(properties)
+      .leftJoin(fields, eq(properties.id, fields.propertyId))
+      .leftJoin(animals, eq(fields.id, animals.currentFieldId))
+      .groupBy(properties.id, properties.name);
+
+    return result;
+  }
+
+  // Movements
+  async createMovement(movement: InsertMovement): Promise<Movement> {
+    const [newMovement] = await db.insert(movements).values(movement).returning();
+    
+    if (movement.toFieldId) {
+      await db
+        .update(animals)
+        .set({ currentFieldId: movement.toFieldId })
+        .where(eq(animals.id, movement.animalId));
+    }
+    
+    return newMovement;
+  }
+
+  async getMovementsByAnimalId(animalId: string): Promise<Movement[]> {
+    const fromFields = alias(fields, 'from_fields');
+    const toFields = alias(fields, 'to_fields');
+    
+    const result = await db
+      .select({
+        id: movements.id,
+        createdAt: movements.createdAt,
+        animalId: movements.animalId,
+        fromFieldId: movements.fromFieldId,
+        toFieldId: movements.toFieldId,
+        movementDate: movements.movementDate,
+        notes: movements.notes,
+        fromFieldName: fromFields.name,
+        toFieldName: toFields.name,
+      })
+      .from(movements)
+      .leftJoin(fromFields, eq(movements.fromFieldId, fromFields.id))
+      .leftJoin(toFields, eq(movements.toFieldId, toFields.id))
+      .where(eq(movements.animalId, animalId))
+      .orderBy(desc(movements.movementDate));
+    
+    return result as Movement[];
+  }
+
+  async getRecentMovements(limit: number = 10): Promise<Movement[]> {
+    const fromFields = alias(fields, 'from_fields');
+    const toFields = alias(fields, 'to_fields');
+    
+    const result = await db
+      .select({
+        id: movements.id,
+        createdAt: movements.createdAt,
+        animalId: movements.animalId,
+        fromFieldId: movements.fromFieldId,
+        toFieldId: movements.toFieldId,
+        movementDate: movements.movementDate,
+        notes: movements.notes,
+        fromFieldName: fromFields.name,
+        toFieldName: toFields.name,
+      })
+      .from(movements)
+      .leftJoin(fromFields, eq(movements.fromFieldId, fromFields.id))
+      .leftJoin(toFields, eq(movements.toFieldId, toFields.id))
+      .orderBy(desc(movements.movementDate))
+      .limit(limit);
+    
+    return result as Movement[];
+  }
+
+  // Vaccinations
+  async createVaccination(vaccination: InsertVaccination): Promise<Vaccination> {
+    const [newVaccination] = await db.insert(vaccinations).values(vaccination).returning();
+    return newVaccination;
+  }
+
+  async getVaccinationsByAnimalId(animalId: string): Promise<Vaccination[]> {
+    return await db
+      .select()
+      .from(vaccinations)
+      .where(eq(vaccinations.animalId, animalId))
+      .orderBy(desc(vaccinations.administeredDate));
+  }
+
+  async updateVaccination(id: string, vaccination: Partial<InsertVaccination>): Promise<Vaccination | undefined> {
+    const [updated] = await db
+      .update(vaccinations)
+      .set(vaccination)
+      .where(eq(vaccinations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteVaccination(id: string): Promise<void> {
+    await db.delete(vaccinations).where(eq(vaccinations.id, id));
+  }
+
+  // Events
+  async createEvent(event: InsertEvent): Promise<Event> {
+    const [newEvent] = await db.insert(events).values(event).returning();
+    return newEvent;
+  }
+
+  async getEventsByAnimalId(animalId: string): Promise<Event[]> {
+    return await db
+      .select()
+      .from(events)
+      .where(eq(events.animalId, animalId))
+      .orderBy(desc(events.eventDate));
+  }
+
+  async updateEvent(id: string, event: Partial<InsertEvent>): Promise<Event | undefined> {
+    const [updated] = await db
+      .update(events)
+      .set(event)
+      .where(eq(events.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteEvent(id: string): Promise<void> {
+    await db.delete(events).where(eq(events.id, id));
+  }
+
+  // Calving Records
+  async createCalvingRecord(record: InsertCalvingRecord): Promise<CalvingRecord> {
+    const [newRecord] = await db.insert(calvingRecords).values(record).returning();
+    return newRecord;
+  }
+
+  async getCalvingRecordsByDamId(damId: string): Promise<CalvingRecord[]> {
+    return await db
+      .select()
+      .from(calvingRecords)
+      .where(eq(calvingRecords.damId, damId))
+      .orderBy(desc(calvingRecords.calvingDate));
+  }
+
+  async updateCalvingRecord(id: string, record: Partial<InsertCalvingRecord>): Promise<CalvingRecord | undefined> {
+    const [updated] = await db
+      .update(calvingRecords)
+      .set(record)
+      .where(eq(calvingRecords.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCalvingRecord(id: string): Promise<void> {
+    await db.delete(calvingRecords).where(eq(calvingRecords.id, id));
+  }
+
+  // Slaughter Records
+  async createSlaughterRecord(record: InsertSlaughterRecord): Promise<SlaughterRecord> {
+    const [newRecord] = await db.insert(slaughterRecords).values(record).returning();
+    return newRecord;
+  }
+
+  async getAllSlaughterRecords(): Promise<SlaughterRecord[]> {
+    return await db.select().from(slaughterRecords).orderBy(desc(slaughterRecords.slaughterDate));
+  }
+
+  async getSlaughterRecordById(id: string): Promise<SlaughterRecord | undefined> {
+    const [record] = await db.select().from(slaughterRecords).where(eq(slaughterRecords.id, id));
+    return record;
+  }
+
+  async deleteSlaughterRecord(id: string): Promise<void> {
+    await db.delete(slaughterRecords).where(eq(slaughterRecords.id, id));
+  }
+
+  // Bulk Import
+  async bulkCreateAnimals(animalList: InsertAnimal[]): Promise<Animal[]> {
+    if (animalList.length === 0) return [];
+    return await db.insert(animals).values(animalList).returning();
+  }
+
+  async bulkCreateProperties(propertyList: InsertProperty[]): Promise<Property[]> {
+    if (propertyList.length === 0) return [];
+    return await db.insert(properties).values(propertyList).returning();
+  }
+
+  async bulkCreateFields(fieldList: InsertField[]): Promise<Field[]> {
+    if (fieldList.length === 0) return [];
+    return await db.insert(fields).values(fieldList).returning();
+  }
+
+  async bulkCreateVaccinations(vaccinationList: InsertVaccination[]): Promise<Vaccination[]> {
+    if (vaccinationList.length === 0) return [];
+    return await db.insert(vaccinations).values(vaccinationList).returning();
+  }
+
+  async bulkCreateEvents(eventList: InsertEvent[]): Promise<Event[]> {
+    if (eventList.length === 0) return [];
+    return await db.insert(events).values(eventList).returning();
+  }
+
+  async bulkCreateCalvingRecords(recordList: InsertCalvingRecord[]): Promise<CalvingRecord[]> {
+    if (recordList.length === 0) return [];
+    return await db.insert(calvingRecords).values(recordList).returning();
+  }
+
+  async bulkCreateSlaughterRecords(recordList: InsertSlaughterRecord[]): Promise<SlaughterRecord[]> {
+    if (recordList.length === 0) return [];
+    return await db.insert(slaughterRecords).values(recordList).returning();
+  }
+
+  // Lookup helpers for imports
+  async getAnimalByTagNumber(tagNumber: string): Promise<Animal | undefined> {
+    const [animal] = await db.select().from(animals).where(eq(animals.tagNumber, tagNumber));
+    return animal;
+  }
+
+  async getPropertyByName(name: string): Promise<Property | undefined> {
+    const [property] = await db.select().from(properties).where(eq(properties.name, name));
+    return property;
+  }
+
+  async getFieldByNameAndProperty(fieldName: string, propertyId: string): Promise<Field | undefined> {
+    const [field] = await db.select().from(fields).where(
+      and(eq(fields.name, fieldName), eq(fields.propertyId, propertyId))
+    );
+    return field;
+  }
+
+  // User operations for authentication
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createUser(userData: { email: string; passwordHash: string; firstName?: string; lastName?: string; isAdmin?: string }): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values({
+        email: userData.email,
+        passwordHash: userData.passwordHash,
+        firstName: userData.firstName || null,
+        lastName: userData.lastName || null,
+        isAdmin: userData.isAdmin || "no",
+      })
+      .returning();
+    return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async updateUserAdminStatus(id: string, isAdmin: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ isAdmin, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserPassword(id: string, passwordHash: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async setPasswordResetToken(email: string, token: string, expires: Date): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        passwordResetToken: token,
+        passwordResetExpires: expires,
+        updatedAt: new Date()
+      })
+      .where(eq(users.email, email))
+      .returning();
+    return user;
+  }
+
+  async getUserByResetToken(token: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.passwordResetToken, token),
+          gte(users.passwordResetExpires, new Date())
+        )
+      );
+    return user;
+  }
+
+  async clearPasswordResetToken(id: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        passwordResetToken: null,
+        passwordResetExpires: null,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+}
+
+export const storage = new DatabaseStorage();
