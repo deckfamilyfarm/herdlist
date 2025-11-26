@@ -75,7 +75,7 @@ Edit `.env` with your database credentials:
 DATABASE_URL=mysql://root:password@localhost:3306/herdlist
 SESSION_SECRET=your-random-secret-here
 NODE_ENV=development
-PORT=5000
+PORT=3005
 ```
 
 Generate a secure session secret:
@@ -103,7 +103,7 @@ VALUES (UUID(), 'admin@example.com', 'YOUR_HASH_HERE', 'Admin', 'User', 'yes');
 npm run dev
 ```
 
-Visit `http://localhost:5000` and log in with your admin credentials.
+Visit `http://localhost:3005` and log in with your admin credentials.
 
 ## Project Structure
 
@@ -257,7 +257,7 @@ git clone -b backend https://github.com/yourusername/herdlist.git
 | `DATABASE_URL` | MySQL connection string | Yes |
 | `SESSION_SECRET` | Secret for session encryption | Yes |
 | `NODE_ENV` | Environment mode (`development`/`production`) | Yes |
-| `PORT` | Server port (default: 5000) | No |
+| `PORT` | Server port (default: 3005) | No |
 
 ## Security Features
 
