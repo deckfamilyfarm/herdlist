@@ -21,7 +21,7 @@ import { Calendar, Syringe, Baby, Activity, Edit } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { VaccinationFormDialog } from "./VaccinationFormDialog";
-import type { Vaccination, Event, CalvingRecord, Animal } from "@shared/schema";
+import type { Vaccination, Event, CalvingRecord, Animal, AnimalStatus } from "@shared/schema";
 
 interface AnimalDetailDialogProps {
   open: boolean;
@@ -29,6 +29,24 @@ interface AnimalDetailDialogProps {
   animal: Animal;
   onEdit?: () => void;
 }
+
+const statusLabel: Record<AnimalStatus, string> = {
+  active: "Active",
+  slaughtered: "Slaughtered",
+  sold: "Sold",
+  died: "Died",
+  missing: "Missing",
+};
+
+const statusVariant: Partial<
+  Record<AnimalStatus, "default" | "secondary" | "destructive" | "outline">
+> = {
+  active: "default",
+  slaughtered: "secondary",
+  sold: "secondary",
+  died: "destructive",
+  missing: "outline",
+};
 
 export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: AnimalDetailDialogProps) {
   const [vaccinationDialogOpen, setVaccinationDialogOpen] = useState(false);
@@ -57,6 +75,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     queryKey: ['/api/animals', animal.id, 'offspring'],
     enabled: open,
   });
+
   const age = animal.dateOfBirth ? 
     `${Math.floor((new Date().getTime() - new Date(animal.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years` : 
     'Unknown';
@@ -72,15 +91,24 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                 <Badge className={animal.type === 'dairy' ? 'bg-chart-1' : 'bg-chart-3'}>
                   {animal.type}
                 </Badge>
+                {/* ✅ Status badge */}
+                <Badge variant={statusVariant[animal.status as AnimalStatus] ?? "outline"}>
+                  {statusLabel[animal.status as AnimalStatus] ?? "Active"}
+                </Badge>
               </DialogTitle>
               <DialogDescription className="text-sm mt-1">
                 Tag: <span className="font-mono">{animal.tagNumber}</span> • {age} • {animal.sex}
               </DialogDescription>
             </div>
-            <Button variant="outline" size="sm" data-testid="button-edit-animal" onClick={() => {
-              onEdit?.();
-              onOpenChange(false);
-            }}>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="button-edit-animal"
+              onClick={() => {
+                onEdit?.();
+                onOpenChange(false);
+              }}
+            >
               <Edit className="h-4 w-4 mr-2" />
               Edit
             </Button>
@@ -112,7 +140,9 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Breeding Method</span>
-                    <span className="font-medium capitalize">{animal.breedingMethod?.replace('-', ' ') || 'Not recorded'}</span>
+                    <span className="font-medium capitalize">
+                      {animal.breedingMethod?.replace('-', ' ') || 'Not recorded'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Herd Name</span>
@@ -121,6 +151,13 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Organic</span>
                     <span className="font-medium">{animal.organic ? 'Yes' : 'No'}</span>
+                  </div>
+                  {/* ✅ Status row */}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <span className="font-medium">
+                      {statusLabel[animal.status as AnimalStatus] ?? "Active"}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -293,3 +330,4 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     </Dialog>
   );
 }
+

@@ -15,9 +15,9 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Animal } from "@shared/schema";
+import { animalStatusEnum, type Animal, type AnimalStatus } from "@shared/schema";
 
-type StatusFilter = "all" | "active" | "slaughtered" | "sold" | "died" | "missing";
+type StatusFilter = "all" | AnimalStatus;
 
 export default function Animals() {
   const { toast } = useToast();
@@ -93,7 +93,7 @@ export default function Animals() {
     const anyAnimal = animal as any;
 
     // Normalize status: treat missing as "active", compare case-insensitively
-    const rawStatus = (anyAnimal.status ?? "active") as string;
+    const rawStatus = (anyAnimal.status ?? "active") as AnimalStatus | string;
     const normalizedStatus = rawStatus.toString().trim().toLowerCase();
 
     const matchesStatus =
@@ -101,7 +101,9 @@ export default function Animals() {
         ? true
         : statusFilter === "active"
         ? // for "active", treat missing/empty as active as well
-          normalizedStatus === "active" || normalizedStatus === "" || normalizedStatus == null
+          normalizedStatus === "active" ||
+          normalizedStatus === "" ||
+          normalizedStatus == null
         : normalizedStatus === statusFilter;
 
     // Search by tag or name
@@ -111,8 +113,7 @@ export default function Animals() {
       (animal.name ?? "").toLowerCase().includes(searchLower);
 
     // Type filter (dairy / beef / all)
-    const matchesType =
-      typeFilter === "all" || animal.type === typeFilter;
+    const matchesType = typeFilter === "all" || animal.type === typeFilter;
 
     // Location filter (home / lease / all)
     const fieldName = (anyAnimal.currentFieldName?.toLowerCase?.() ?? "") as string;
@@ -199,12 +200,12 @@ export default function Animals() {
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="active">Active</SelectItem>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="slaughtered">Slaughtered</SelectItem>
-            <SelectItem value="sold">Sold</SelectItem>
-            <SelectItem value="died">Died</SelectItem>
-            <SelectItem value="missing">Missing</SelectItem>
+            {animalStatusEnum.map((status) => (
+              <SelectItem key={status} value={status}>
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

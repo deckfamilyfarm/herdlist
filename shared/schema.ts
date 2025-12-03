@@ -1,13 +1,91 @@
 import { sql } from "drizzle-orm";
-import { mysqlTable, varchar, timestamp, int, decimal, date, json, index, boolean, mysqlEnum } from "drizzle-orm/mysql-core";
+import {
+  mysqlTable,
+  varchar,
+  timestamp,
+  int,
+  decimal,
+  date,
+  json,
+  index,
+  boolean,
+  mysqlEnum,
+} from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+/* =========================
+ * Helpers for DATE columns
+ * ========================= */
+
+const dateOnlyRequired = z
+  .union([z.date(), z.string()])
+  .transform((val) => {
+    if (val instanceof Date) {
+      return val.toISOString().slice(0, 10); // YYYY-MM-DD
+    }
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (!trimmed) {
+        throw new Error("Date is required");
+      }
+      return trimmed.includes("T") ? trimmed.slice(0, 10) : trimmed;
+    }
+    throw new Error("Invalid date");
+  });
+
+const dateOnlyOptional = z
+  .union([z.date(), z.string()])
+  .optional()
+  .nullable()
+  .transform((val) => {
+    if (!val) return null;
+    if (val instanceof Date) {
+      return val.toISOString().slice(0, 10);
+    }
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (!trimmed) return null;
+      return trimmed.includes("T") ? trimmed.slice(0, 10) : trimmed;
+    }
+    return null;
+  });
+
+/* =========================
+ * Shared enums / types
+ * ========================= */
+
+// Status enum for animals (frontend + backend)
+export const animalStatusEnum = [
+  "active",
+  "slaughtered",
+  "sold",
+  "died",
+  "missing",
+] as const;
+
+export type AnimalStatus = (typeof animalStatusEnum)[number];
+
 // Export herd name enum for use in forms and validation
-export const herdNameEnum = mysqlEnum("herd_name", [ "wet", "nurse", "finish", "main", "grafting", "yearling", "missing", "bull" ]) 
+export const herdNameEnum = mysqlEnum("herd_name", [
+  "wet",
+  "nurse",
+  "finish",
+  "main",
+  "grafting",
+  "yearling",
+  "missing",
+  "bull",
+]);
+
+/* =========================
+ * Tables
+ * ========================= */
 
 export const animals = mysqlTable("animals", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   tagNumber: varchar("tag_number", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
   type: varchar("type", { length: 50 }).notNull(),
@@ -19,12 +97,14 @@ export const animals = mysqlTable("animals", {
   currentFieldId: varchar("current_field_id", { length: 36 }),
   organic: boolean("organic").default(false),
   herdName: herdNameEnum,
-  status: mysqlEnum("status", ["active", "slaughtered", "sold", "died", "missing"]).notNull().default("active"),
+  status: mysqlEnum("status", animalStatusEnum).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const properties = mysqlTable("properties", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   name: varchar("name", { length: 255 }).notNull(),
   isLeased: varchar("is_leased", { length: 10 }).notNull(),
   leaseStartDate: date("lease_start_date"),
@@ -34,7 +114,9 @@ export const properties = mysqlTable("properties", {
 });
 
 export const fields = mysqlTable("fields", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   name: varchar("name", { length: 255 }).notNull(),
   propertyId: varchar("property_id", { length: 36 }).notNull(),
   capacity: int("capacity"),
@@ -42,7 +124,9 @@ export const fields = mysqlTable("fields", {
 });
 
 export const movements = mysqlTable("movements", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   animalId: varchar("animal_id", { length: 36 }).notNull(),
   fromFieldId: varchar("from_field_id", { length: 36 }),
   toFieldId: varchar("to_field_id", { length: 36 }).notNull(),
@@ -52,7 +136,9 @@ export const movements = mysqlTable("movements", {
 });
 
 export const vaccinations = mysqlTable("vaccinations", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   animalId: varchar("animal_id", { length: 36 }).notNull(),
   vaccineName: varchar("vaccine_name", { length: 255 }).notNull(),
   administeredDate: date("administered_date").notNull(),
@@ -62,7 +148,9 @@ export const vaccinations = mysqlTable("vaccinations", {
 });
 
 export const events = mysqlTable("events", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   animalId: varchar("animal_id", { length: 36 }).notNull(),
   eventType: varchar("event_type", { length: 100 }).notNull(),
   eventDate: date("event_date").notNull(),
@@ -71,7 +159,9 @@ export const events = mysqlTable("events", {
 });
 
 export const calvingRecords = mysqlTable("calving_records", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   damId: varchar("dam_id", { length: 36 }).notNull(),
   calvingDate: date("calving_date").notNull(),
   calfId: varchar("calf_id", { length: 36 }),
@@ -82,7 +172,9 @@ export const calvingRecords = mysqlTable("calving_records", {
 });
 
 export const slaughterRecords = mysqlTable("slaughter_records", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   animalId: varchar("animal_id", { length: 36 }).notNull(),
   slaughterDate: date("slaughter_date").notNull(),
   ageMonths: int("age_months"),
@@ -105,7 +197,9 @@ export const sessions = mysqlTable(
 
 // Users table for authentication
 export const users = mysqlTable("users", {
-  id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
   email: varchar("email", { length: 255 }).unique().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   firstName: varchar("first_name", { length: 100 }),
@@ -117,74 +211,120 @@ export const users = mysqlTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertAnimalSchema = createInsertSchema(animals).omit({
-  id: true,
-  createdAt: true,
-});
+/* =========================
+ * Insert Schemas (Zod)
+ * ========================= */
 
-export const insertPropertySchema = createInsertSchema(properties).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertFieldSchema = createInsertSchema(fields).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertMovementSchema = createInsertSchema(movements).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  movementDate: z.union([z.date(), z.string()]).transform(val => typeof val === 'string' ? new Date(val) : val),
-});
-
-export const insertVaccinationSchema = createInsertSchema(vaccinations).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertEventSchema = createInsertSchema(events).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertCalvingRecordSchema = createInsertSchema(calvingRecords).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertSlaughterRecordSchema = createInsertSchema(slaughterRecords, {
-  slaughterDate: z.coerce.date(),  // accept string and coerce to Date
-  ageMonths: z
-    .number()
-    .int()
-    .nonnegative()
-    .nullable()
-    .optional(),                   // backend will compute if omitted
+export const insertAnimalSchema = createInsertSchema(animals, {
+  // DATE column -> normalized YYYY-MM-DD string
+  dateOfBirth: dateOnlyOptional,
 }).omit({
   id: true,
   createdAt: true,
 });
 
-// CSV Import Schemas
+export const insertPropertySchema = createInsertSchema(properties, {
+  leaseStartDate: dateOnlyOptional,
+  leaseEndDate: dateOnlyOptional,
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertFieldSchema = createInsertSchema(fields, {
+  // Coerce string from input into number
+  capacity: z.coerce.number().int().optional().nullable(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMovementSchema = createInsertSchema(movements)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    // movementDate is a TIMESTAMP; we keep it as Date so Drizzle can handle it
+    movementDate: z
+      .union([z.date(), z.string()])
+      .transform((val) =>
+        typeof val === "string" ? new Date(val) : (val as Date),
+      ),
+  });
+
+export const insertVaccinationSchema = createInsertSchema(vaccinations, {
+  administeredDate: dateOnlyRequired,
+  nextDueDate: dateOnlyOptional,
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEventSchema = createInsertSchema(events, {
+  eventDate: dateOnlyRequired,
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCalvingRecordSchema = createInsertSchema(calvingRecords, {
+  calvingDate: dateOnlyRequired,
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSlaughterRecordSchema = createInsertSchema(slaughterRecords, {
+  slaughterDate: dateOnlyRequired, // DATE column, normalized
+  ageMonths: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional(), // backend can compute if omitted
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+/* =========================
+ * CSV Import Schemas
+ * ========================= */
+
 export const csvAnimalSchema = z.object({
   tagNumber: z.string().min(1),
   name: z.string().optional(),
-  type: z.enum(['dairy', 'beef']).or(z.literal("")),
-  sex: z.enum(['male', 'female']).or(z.literal("")),
+  type: z.enum(["dairy", "beef"]).or(z.literal("")),
+  sex: z.enum(["male", "female"]).or(z.literal("")),
   dateOfBirth: z.string().optional(),
   breedingMethod: z.string().optional(),
   sireId: z.string().optional(),
   damId: z.string().optional(),
   currentFieldId: z.string().optional(),
-  organic: z.string().optional().transform(val => val?.toLowerCase() === 'true'),
-  herdName: z.enum(['wet', 'nurse', 'finish', 'main', 'grafting', 'yearling', 'missing', 'bull']).optional(),
+  organic: z
+    .string()
+    .optional()
+    .transform((val) => val?.toLowerCase() === "true"),
+  herdName: z
+    .enum([
+      "wet",
+      "nurse",
+      "finish",
+      "main",
+      "grafting",
+      "yearling",
+      "missing",
+      "bull",
+    ])
+    .optional(),
+  // Allow setting status from CSV, but optional
+  status: z.enum(animalStatusEnum).optional(),
 });
 
 export const csvPropertySchema = z.object({
   name: z.string().min(1),
-  isLeased: z.enum(['yes', 'no']),
+  isLeased: z.enum(["yes", "no"]),
   leaseStartDate: z.string().optional(),
   leaseEndDate: z.string().optional(),
   leaseholder: z.string().optional(),
@@ -193,7 +333,10 @@ export const csvPropertySchema = z.object({
 export const csvFieldSchema = z.object({
   name: z.string().min(1),
   propertyId: z.string().min(1),
-  capacity: z.string().optional().transform(val => val ? parseInt(val) : undefined),
+  capacity: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val) : undefined)),
 });
 
 export const csvVaccinationSchema = z.object({
@@ -216,20 +359,26 @@ export const csvCalvingRecordSchema = z.object({
   calvingDate: z.string().min(1),
   calfId: z.string().optional(),
   calfTagNumber: z.string().optional(),
-  calfSex: z.enum(['male', 'female']).optional(),
+  calfSex: z.enum(["male", "female"]).optional(),
   notes: z.string().optional(),
 });
 
 export const csvSlaughterRecordSchema = z.object({
   animalId: z.string().min(1),
   slaughterDate: z.string().min(1),
-  ageMonths: z.string().optional().transform(val => val ? parseInt(val) : undefined),
+  ageMonths: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val) : undefined)),
   liveWeight: z.string().optional(),
   hangingWeight: z.string().optional(),
   processor: z.string().optional(),
 });
 
-// Authentication schemas
+/* =========================
+ * Auth Schemas
+ * ========================= */
+
 export const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -256,7 +405,10 @@ export const resetPasswordSchema = z.object({
   newPassword: z.string().min(6),
 });
 
-// Type exports
+/* =========================
+ * Type exports
+ * ========================= */
+
 export type Animal = typeof animals.$inferSelect;
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 
@@ -291,3 +443,4 @@ export type ImportResult = {
   failed: number;
   errors: string[];
 };
+

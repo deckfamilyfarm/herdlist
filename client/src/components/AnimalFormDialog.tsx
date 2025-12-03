@@ -14,7 +14,8 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { InsertAnimal, Animal, Field } from "@shared/schema";
+import type { InsertAnimal, Animal, Field, AnimalStatus } from "@shared/schema";
+import { animalStatusEnum } from "@shared/schema";
 
 interface AnimalFormDialogProps {
   open: boolean;
@@ -25,7 +26,20 @@ interface AnimalFormDialogProps {
 
 export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: AnimalFormDialogProps) {
   const { toast } = useToast();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    tagNumber: string;
+    name: string;
+    type: string;
+    sex: string;
+    breedingMethod: string;
+    dateOfBirth: string;
+    sireId: string;
+    damId: string;
+    currentFieldId: string;
+    organic: boolean;
+    herdName: string;
+    status: AnimalStatus;
+  }>({
     tagNumber: "",
     name: "",
     type: "",
@@ -37,6 +51,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     currentFieldId: "",
     organic: false,
     herdName: "",
+    status: "active",
   });
 
   // Fetch animals for sire/dam selection
@@ -57,12 +72,13 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         type: animal.type,
         sex: animal.sex,
         breedingMethod: animal.breedingMethod || "",
-        dateOfBirth: animal.dateOfBirth || "",
+        dateOfBirth: (animal.dateOfBirth as any as string) || "",
         sireId: animal.sireId || "",
         damId: animal.damId || "",
         currentFieldId: animal.currentFieldId || "",
         organic: animal.organic || false,
         herdName: animal.herdName || "",
+        status: (animal.status as AnimalStatus) ?? "active",
       });
     } else {
       setFormData({
@@ -77,6 +93,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         currentFieldId: "",
         organic: false,
         herdName: "",
+        status: "active",
       });
     }
   }, [animal, open]);
@@ -107,6 +124,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         currentFieldId: "",
         organic: false,
         herdName: "",
+        status: "active",
       });
     },
     onError: (error: Error) => {
@@ -155,7 +173,17 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       damId: formData.damId || undefined,
       currentFieldId: formData.currentFieldId || undefined,
       organic: formData.organic,
-      herdName: (formData.herdName || undefined) as "wet" | "nurse" | "finish" | "main" | "grafting" | "yearlings" | undefined,
+      herdName: (formData.herdName || undefined) as
+        | "wet"
+        | "nurse"
+        | "finish"
+        | "main"
+        | "grafting"
+        | "yearling"
+        | "missing"
+        | "bull"
+        | undefined,
+      status: formData.status,
     };
     
     if (animal) {
@@ -218,7 +246,10 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
           </div>
           <div className="space-y-2">
             <Label htmlFor="breedingMethod">Breeding Method</Label>
-            <Select value={formData.breedingMethod} onValueChange={(value) => setFormData({ ...formData, breedingMethod: value })}>
+            <Select
+              value={formData.breedingMethod}
+              onValueChange={(value) => setFormData({ ...formData, breedingMethod: value })}
+            >
               <SelectTrigger id="breedingMethod" data-testid="select-breeding-method">
                 <SelectValue placeholder="Select method" />
               </SelectTrigger>
@@ -240,39 +271,58 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
           </div>
           <div className="space-y-2">
             <Label htmlFor="sireId">Sire (Father)</Label>
-            <Select value={formData.sireId || "none"} onValueChange={(value) => setFormData({ ...formData, sireId: value === "none" ? "" : value })}>
+            <Select
+              value={formData.sireId || "none"}
+              onValueChange={(value) =>
+                setFormData({ ...formData, sireId: value === "none" ? "" : value })
+              }
+            >
               <SelectTrigger id="sireId" data-testid="select-sire">
                 <SelectValue placeholder="Select sire (optional)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                {animals.filter(a => a.sex === 'male').map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.tagNumber} {a.name ? `(${a.name})` : ''}
-                  </SelectItem>
-                ))}
+                {animals
+                  .filter((a) => a.sex === "male")
+                  .map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.tagNumber} {a.name ? `(${a.name})` : ""}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="damId">Dam (Mother)</Label>
-            <Select value={formData.damId || "none"} onValueChange={(value) => setFormData({ ...formData, damId: value === "none" ? "" : value })}>
+            <Select
+              value={formData.damId || "none"}
+              onValueChange={(value) =>
+                setFormData({ ...formData, damId: value === "none" ? "" : value })
+              }
+            >
               <SelectTrigger id="damId" data-testid="select-dam">
                 <SelectValue placeholder="Select dam (optional)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                {animals.filter(a => a.sex === 'female').map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.tagNumber} {a.name ? `(${a.name})` : ''}
-                  </SelectItem>
-                ))}
+                {animals
+                  .filter((a) => a.sex === "female")
+                  .map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.tagNumber} {a.name ? `(${a.name})` : ""}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="currentFieldId">Current Location</Label>
-            <Select value={formData.currentFieldId || "none"} onValueChange={(value) => setFormData({ ...formData, currentFieldId: value === "none" ? "" : value })}>
+            <Select
+              value={formData.currentFieldId || "none"}
+              onValueChange={(value) =>
+                setFormData({ ...formData, currentFieldId: value === "none" ? "" : value })
+              }
+            >
               <SelectTrigger id="currentFieldId" data-testid="select-current-field">
                 <SelectValue placeholder="Select field (optional)" />
               </SelectTrigger>
@@ -288,7 +338,12 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
           </div>
           <div className="space-y-2">
             <Label htmlFor="herdName">Herd Name</Label>
-            <Select value={formData.herdName || "none"} onValueChange={(value) => setFormData({ ...formData, herdName: value === "none" ? "" : value })}>
+            <Select
+              value={formData.herdName || "none"}
+              onValueChange={(value) =>
+                setFormData({ ...formData, herdName: value === "none" ? "" : value })
+              }
+            >
               <SelectTrigger id="herdName" data-testid="select-herd-name">
                 <SelectValue placeholder="Select herd (optional)" />
               </SelectTrigger>
@@ -299,10 +354,47 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                 <SelectItem value="finish">Finish</SelectItem>
                 <SelectItem value="main">Main</SelectItem>
                 <SelectItem value="grafting">Grafting</SelectItem>
-                <SelectItem value="yearlings">Yearlings</SelectItem>
+                <SelectItem value="yearling">Yearling</SelectItem>
+                <SelectItem value="missing">Missing</SelectItem>
+                <SelectItem value="bull">Bull</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {/* ✅ Status selector with slaughtered disabled + note */}
+          <div className="space-y-2">
+            <Label htmlFor="status">Status *</Label>
+            <Select
+              value={formData.status}
+              onValueChange={(value) =>
+                setFormData({ ...formData, status: value as AnimalStatus })
+              }
+            >
+              <SelectTrigger id="status" data-testid="select-status">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {animalStatusEnum.map((status) => {
+                  if (status === "slaughtered") {
+                    return (
+                      <SelectItem key={status} value={status} disabled>
+                        Slaughtered (use Slaughtered Form)
+                      </SelectItem>
+                    );
+                  }
+                  return (
+                    <SelectItem key={status} value={status}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              To mark an animal as slaughtered, use the dedicated Slaughtered Form screen.
+            </p>
+          </div>
+
           <div className="flex items-center space-x-2">
             <Checkbox 
               id="organic" 
@@ -327,3 +419,4 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     </Dialog>
   );
 }
+
