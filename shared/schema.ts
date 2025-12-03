@@ -4,7 +4,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Export herd name enum for use in forms and validation
-export const herdNameEnum = mysqlEnum("herd_name", ["wet", "nurse", "finish", "main", "grafting", "yearlings"]);
+export const herdNameEnum = mysqlEnum("herd_name", [ "wet", "nurse", "finish", "main", "grafting", "yearling", "missing", "bull" ]) 
 
 export const animals = mysqlTable("animals", {
   id: varchar("id", { length: 36 }).primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -19,6 +19,7 @@ export const animals = mysqlTable("animals", {
   currentFieldId: varchar("current_field_id", { length: 36 }),
   organic: boolean("organic").default(false),
   herdName: herdNameEnum,
+  status: mysqlEnum("status", ["active", "slaughtered", "sold", "died", "missing"]).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -153,7 +154,15 @@ export const insertCalvingRecordSchema = createInsertSchema(calvingRecords).omit
   createdAt: true,
 });
 
-export const insertSlaughterRecordSchema = createInsertSchema(slaughterRecords).omit({
+export const insertSlaughterRecordSchema = createInsertSchema(slaughterRecords, {
+  slaughterDate: z.coerce.date(),  // accept string and coerce to Date
+  ageMonths: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional(),                   // backend will compute if omitted
+}).omit({
   id: true,
   createdAt: true,
 });
@@ -162,15 +171,15 @@ export const insertSlaughterRecordSchema = createInsertSchema(slaughterRecords).
 export const csvAnimalSchema = z.object({
   tagNumber: z.string().min(1),
   name: z.string().optional(),
-  type: z.enum(['dairy', 'beef']),
-  sex: z.enum(['male', 'female']),
+  type: z.enum(['dairy', 'beef']).or(z.literal("")),
+  sex: z.enum(['male', 'female']).or(z.literal("")),
   dateOfBirth: z.string().optional(),
   breedingMethod: z.string().optional(),
   sireId: z.string().optional(),
   damId: z.string().optional(),
   currentFieldId: z.string().optional(),
   organic: z.string().optional().transform(val => val?.toLowerCase() === 'true'),
-  herdName: z.enum(['wet', 'nurse', 'finish', 'main', 'grafting', 'yearlings']).optional(),
+  herdName: z.enum(['wet', 'nurse', 'finish', 'main', 'grafting', 'yearling', 'missing', 'bull']).optional(),
 });
 
 export const csvPropertySchema = z.object({

@@ -32,6 +32,8 @@ import {
   type User,
 } from "@shared/schema";
 
+console.log("DB check:", typeof (db as any).insert, typeof (db as any).select);
+
 export interface IStorage {
   // Animals
   createAnimal(animal: InsertAnimal): Promise<Animal>;
@@ -135,33 +137,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllAnimals(): Promise<Animal[]> {
-    const sireAnimals = alias(animals, "sire_animals");
-    const damAnimals = alias(animals, "dam_animals");
+  const sireAnimals = alias(animals, "sire_animals");
+  const damAnimals = alias(animals, "dam_animals");
 
-    const result = await db
-      .select({
-        id: animals.id,
-        tagNumber: animals.tagNumber,
-        name: animals.name,
-        type: animals.type,
-        sex: animals.sex,
-        dateOfBirth: animals.dateOfBirth,
-        breedingMethod: animals.breedingMethod,
-        sireId: animals.sireId,
-        damId: animals.damId,
-        currentFieldId: animals.currentFieldId,
-        createdAt: animals.createdAt,
-        currentFieldName: fields.name,
-        sireTagNumber: sireAnimals.tagNumber,
-        damTagNumber: damAnimals.tagNumber,
-      })
-      .from(animals)
-      .leftJoin(fields, eq(animals.currentFieldId, fields.id))
-      .leftJoin(sireAnimals, eq(animals.sireId, sireAnimals.id))
-      .leftJoin(damAnimals, eq(animals.damId, damAnimals.id));
+  const result = await db
+    .select({
+      id: animals.id,
+      tagNumber: animals.tagNumber,
+      name: animals.name,
+      type: animals.type,
+      sex: animals.sex,
+      dateOfBirth: animals.dateOfBirth,
+	  status: animals.status,
+      breedingMethod: animals.breedingMethod,
+      sireId: animals.sireId,
+      damId: animals.damId,
+      currentFieldId: animals.currentFieldId,
+      createdAt: animals.createdAt,
+      currentFieldName: fields.name,
+      sireTagNumber: sireAnimals.tagNumber,
+      damTagNumber: damAnimals.tagNumber,
+    })
+    .from(animals)
+    .leftJoin(fields, eq(animals.currentFieldId, fields.id))
+    .leftJoin(sireAnimals, eq(animals.sireId, sireAnimals.id))
+    .leftJoin(damAnimals, eq(animals.damId, damAnimals.id));
 
-    return result as Animal[];
-  }
+  return result as Animal[];
+}
 
   async getAnimalById(id: string): Promise<Animal | undefined> {
     const [animal] = await db.select().from(animals).where(eq(animals.id, id));
@@ -464,13 +467,61 @@ export class DatabaseStorage implements IStorage {
 
   // ---------- Slaughter Records ----------
 
+    // ---------- Slaughter Records ----------
+
   async createSlaughterRecord(record: InsertSlaughterRecord): Promise<SlaughterRecord> {
     const id = crypto.randomUUID();
-    await db.insert(slaughterRecords).values({ ...(record as any), id });
-    const [created] = await db.select().from(slaughterRecords).where(eq(slaughterRecords.id, id));
+
+    // Compute ageMonths on backend if not provided
+    let ageMonths: number | null = record.ageMonths ?? null;
+
+    if (ageMonths == null && record.animalId && record.slaughterDate) {
+      // get animal to read DOB
+      const animal = await this.getAnimalById(record.animalId);
+      if (animal?.dateOfBirth) {
+        const dob = new Date(animal.dateOfBirth as any);
+        const slaughter = new Date(record.slaughterDate as any);
+
+        if (!isNaN(dob.getTime()) && !isNaN(slaughter.getTime())) {
+          let months =
+            (slaughter.getFullYear() - dob.getFullYear()) * 12 +
+            (slaughter.getMonth() - dob.getMonth());
+
+          // If slaughter day-of-month is before DOB day-of-month, subtract 1 month
+          if (slaughter.getDate() < dob.getDate()) {
+            months -= 1;
+          }
+
+          if (months < 0) months = 0;
+          ageMonths = months;
+        }
+      }
+    }
+
+    await db.insert(slaughterRecords).values({
+      ...(record as any),
+      id,
+      ageMonths,
+    });
+
+    // Mark animal as slaughtered + clear field/herd
+  await db
+    .update(animals)
+    .set({
+      status: "slaughtered",
+      currentFieldId: null,
+      herdName: null,
+    })
+    .where(eq(animals.id, record.animalId));	
+
+    const [created] = await db
+      .select()
+      .from(slaughterRecords)
+      .where(eq(slaughterRecords.id, id));
+
     return created as SlaughterRecord;
   }
-
+ 
   async getAllSlaughterRecords(): Promise<SlaughterRecord[]> {
     return await db.select().from(slaughterRecords).orderBy(desc(slaughterRecords.slaughterDate));
   }
@@ -488,13 +539,22 @@ export class DatabaseStorage implements IStorage {
 
   async bulkCreateAnimals(animalList: InsertAnimal[]): Promise<Animal[]> {
     if (animalList.length === 0) return [];
-    // We don't actually use the returned rows in the importer, just insert
     const withIds = animalList.map((a) => ({
       ...(a as any),
       id: crypto.randomUUID(),
     }));
-    await db.insert(animals).values(withIds);
-    return [];
+
+    try {
+      await db.insert(animals).values(withIds);
+      return [];
+    } catch (err: any) {
+      console.error("bulkCreateAnimals DB error:", {
+        message: err?.message,
+        code: err?.code,
+        sql: err?.sql,
+      });
+      throw err; // let the route handler turn this into a 500
+    }
   }
 
   async bulkCreateProperties(propertyList: InsertProperty[]): Promise<Property[]> {
