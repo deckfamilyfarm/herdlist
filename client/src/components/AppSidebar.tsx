@@ -60,6 +60,24 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation();
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (err) {
+      console.error("Logout error:", err);
+      // even if logout fails, we still want to dump the user back to the entry screen
+    } finally {
+      // Your login screen is at "/", not "/login"
+      window.location.href = "/";
+    }
+  };
+
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border p-4">
@@ -75,7 +93,7 @@ export function AppSidebar() {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
@@ -87,11 +105,11 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border p-4 space-y-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="w-full gap-2" 
-          onClick={() => window.location.href = "/api/logout"}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full gap-2"
+          onClick={handleLogout}
           data-testid="button-logout"
         >
           <LogOut className="h-4 w-4" />
@@ -102,3 +120,4 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+

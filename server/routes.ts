@@ -103,16 +103,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/auth/logout', (req, res) => {
+    app.post("/api/auth/logout", isAuthenticated, (req, res) => {
+    // express-session default cookie name is "connect.sid"
+    const cookieName = "connect.sid";
+
     req.logout((err) => {
       if (err) {
         console.error("Logout error:", err);
         return res.status(500).json({ message: "Logout failed" });
       }
-      res.json({ message: "Logged out successfully" });
+
+      // Destroy the session in the MySQL store
+      req.session?.destroy((destroyErr) => {
+        if (destroyErr) {
+          console.error("Session destroy error on logout:", destroyErr);
+          // we still continue to clear the cookie + respond
+        }
+
+        // Clear the browser cookie (options must match auth.ts getSession())
+        res.clearCookie(cookieName, {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          path: "/", // default cookie path
+        });
+
+        return res.json({ message: "Logged out successfully" });
+      });
     });
   });
-
+ 
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       res.json(req.user);
