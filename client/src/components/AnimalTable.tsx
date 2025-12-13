@@ -17,9 +17,10 @@ interface AnimalTableProps {
   onView?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onSearchChange?: (value: string) => void;
 }
 
-export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTableProps) {
+export function AnimalTable({ animals, onView, onEdit, onDelete, onSearchChange }: AnimalTableProps) {
   const getTypeColor = (type: string) => {
     return type === "dairy" ? "bg-chart-1 text-primary-foreground" : "bg-chart-3 text-primary-foreground";
   };
@@ -127,7 +128,7 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
         <TableBody>
           {sortedAnimals.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="text-center text-muted-foreground">
+              <TableCell colSpan={11} className="text-center text-muted-foreground">
                 No animals found
               </TableCell>
             </TableRow>
@@ -152,10 +153,12 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
                       type="button"
                       className="text-primary hover:underline"
                       onClick={() => {
-                        const el = document.querySelector<HTMLInputElement>('[data-testid=\"input-search\"]');
+                        const value = (animal as any).sireTagNumber as string;
+                        onSearchChange?.(value);
+                        const el = document.querySelector<HTMLInputElement>('[data-testid="input-search"]');
                         if (el) {
-                          el.value = (animal as any).sireTagNumber as string;
-                          el.dispatchEvent(new Event('input', { bubbles: true }));
+                          el.value = value;
+                          el.dispatchEvent(new Event("input", { bubbles: true }));
                         }
                       }}
                     >
@@ -171,10 +174,12 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
                       type="button"
                       className="text-primary hover:underline"
                       onClick={() => {
-                        const el = document.querySelector<HTMLInputElement>('[data-testid=\"input-search\"]');
+                        const value = (animal as any).damTagNumber as string;
+                        onSearchChange?.(value);
+                        const el = document.querySelector<HTMLInputElement>('[data-testid="input-search"]');
                         if (el) {
-                          el.value = (animal as any).damTagNumber as string;
-                          el.dispatchEvent(new Event('input', { bubbles: true }));
+                          el.value = value;
+                          el.dispatchEvent(new Event("input", { bubbles: true }));
                         }
                       }}
                     >

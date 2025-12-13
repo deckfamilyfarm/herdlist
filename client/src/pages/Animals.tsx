@@ -42,7 +42,7 @@ export default function Animals() {
   const [sexFilter, setSexFilter] = useState<"all" | "cow" | "bull" | "steer" | "stag" | "freemartin">("all");
   const [polledFilter, setPolledFilter] = useState<BooleanFilter>("all");
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active"); // default "active"
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all"); // default "all"
   const [betacaseinFilter, setBetacaseinFilter] = useState<BetacaseinFilter>("all");
 
   const { data: animals = [], isLoading } = useQuery<Animal[]>({
@@ -393,6 +393,7 @@ export default function Animals() {
           onView={handleViewAnimal}
           onEdit={handleEditAnimal}
           onDelete={handleDeleteAnimal}
+          onSearchChange={setSearchTerm}
         />
       )}
 

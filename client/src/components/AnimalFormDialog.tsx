@@ -224,7 +224,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-add-animal">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto" data-testid="dialog-add-animal">
         <DialogHeader>
           <DialogTitle>{animal ? "Edit Animal" : "Add New Animal"}</DialogTitle>
         </DialogHeader>
