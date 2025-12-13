@@ -172,6 +172,7 @@ export class DatabaseStorage implements IStorage {
       herdName: animals.herdName,
       createdAt: animals.createdAt,
       phenotype: animals.phenotype,
+      organic: animals.organic,
       polled: animals.polled,
       betacasein: animals.betacasein,
       currentFieldName: fields.name,
@@ -219,6 +220,7 @@ export class DatabaseStorage implements IStorage {
         herdName: animals.herdName,
         createdAt: animals.createdAt,
         phenotype: animals.phenotype,
+        organic: animals.organic,
         polled: animals.polled,
         betacasein: animals.betacasein,
       })
@@ -249,6 +251,7 @@ export class DatabaseStorage implements IStorage {
         herdName: animals.herdName,
         createdAt: animals.createdAt,
         phenotype: animals.phenotype,
+        organic: animals.organic,
         polled: animals.polled,
         betacasein: animals.betacasein,
         currentFieldName: fields.name,

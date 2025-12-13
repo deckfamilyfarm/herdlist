@@ -98,7 +98,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         sireId: animal.sireId || "",
         damId: animal.damId || "",
         currentFieldId: animal.currentFieldId || "",
-        organic: animal.organic || false,
+        organic: Boolean((animal as any).organic),
         phenotype: animal.phenotype || "",
         betacasein: (animal as any).betacasein || "",
         polled: Boolean(animal.polled),
@@ -187,7 +187,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+ const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const submitData: InsertAnimal = {
       tagNumber: formData.tagNumber,
@@ -197,7 +197,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       sireId: formData.sireId || null,
       damId: formData.damId || null,
       currentFieldId: formData.currentFieldId || undefined,
-      organic: formData.organic,
+      organic: Boolean(formData.organic),
       herdName: (formData.herdName || null) as
         | "wet"
         | "nurse"
