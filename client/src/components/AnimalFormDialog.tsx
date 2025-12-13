@@ -50,7 +50,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     currentFieldId: string;
     organic: boolean;
     phenotype: string;
-    a2a2: boolean;
+    betacasein: string;
     polled: boolean;
     herdName: string;
     status: AnimalStatus;
@@ -64,7 +64,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     currentFieldId: "",
     organic: false,
     phenotype: "",
-    a2a2: false,
+    betacasein: "",
     polled: false,
     herdName: "",
     status: "active",
@@ -100,7 +100,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         currentFieldId: animal.currentFieldId || "",
         organic: animal.organic || false,
         phenotype: animal.phenotype || "",
-        a2a2: Boolean(animal.a2a2),
+        betacasein: (animal as any).betacasein || "",
         polled: Boolean(animal.polled),
         herdName: animal.herdName || "",
         status: (animal.status as AnimalStatus) ?? "active",
@@ -116,7 +116,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         currentFieldId: "",
         organic: false,
         phenotype: "",
-        a2a2: false,
+        betacasein: "",
         polled: false,
         herdName: "",
         status: "active",
@@ -140,15 +140,15 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       onOpenChange(false);
       setFormData({
         tagNumber: "",
-        type: "",
-        sex: "",
-        dateOfBirth: "",
+      type: "",
+      sex: "",
+      dateOfBirth: "",
         sireId: "",
         damId: "",
         currentFieldId: "",
         organic: false,
         phenotype: "",
-        a2a2: false,
+        betacasein: "",
         polled: false,
         herdName: "",
         status: "active",
@@ -193,7 +193,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       tagNumber: formData.tagNumber,
       type: formData.type,
       sex: formData.sex,
-      breedingMethod: formData.breedingMethod || undefined,
       dateOfBirth: formData.dateOfBirth || undefined,
       sireId: formData.sireId || null,
       damId: formData.damId || null,
@@ -211,7 +210,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         | null,
       status: formData.status,
       phenotype: formData.phenotype.trim() || null,
-      a2a2: formData.a2a2,
+      betacasein: formData.betacasein || null,
       polled: formData.polled,
     };
     
@@ -225,7 +224,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" data-testid="dialog-add-animal">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-add-animal">
         <DialogHeader>
           <DialogTitle>{animal ? "Edit Animal" : "Add New Animal"}</DialogTitle>
         </DialogHeader>
@@ -482,16 +481,22 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               Organic
             </Label>
           </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="a2a2"
-              checked={formData.a2a2}
-              onCheckedChange={(checked) => setFormData({ ...formData, a2a2: checked === true })}
-              data-testid="checkbox-a2a2"
-            />
-            <Label htmlFor="a2a2" className="text-sm font-normal cursor-pointer">
-              A2A2
-            </Label>
+          <div className="space-y-2">
+            <Label htmlFor="betacasein">A2 Genotype (Beta Casein)</Label>
+            <Select
+              value={formData.betacasein || "none"}
+              onValueChange={(value) => setFormData({ ...formData, betacasein: value === "none" ? "" : value })}
+            >
+              <SelectTrigger id="betacasein" data-testid="select-betacasein">
+                <SelectValue placeholder="Select beta-casein genotype" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not Tested</SelectItem>
+                <SelectItem value="A2/A2">A2/A2</SelectItem>
+                <SelectItem value="A1">A1</SelectItem>
+                <SelectItem value="Not Tested">Not Tested</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -501,7 +506,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               data-testid="checkbox-polled"
             />
             <Label htmlFor="polled" className="text-sm font-normal cursor-pointer">
-              Polled
+              Has Polled Genotype
             </Label>
           </div>
           <div className="space-y-2">

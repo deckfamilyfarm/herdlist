@@ -30,7 +30,15 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
     return str.includes("T") ? str.split("T")[0] : str;
   };
 
-  type SortKey = "tagNumber" | "phenotype" | "type" | "sex" | "dateOfBirth" | "currentLocation" | "a2a2" | "polled";
+  type SortKey =
+    | "tagNumber"
+    | "phenotype"
+    | "type"
+    | "sex"
+    | "dateOfBirth"
+    | "currentLocation"
+    | "betacasein"
+    | "polled";
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "dateOfBirth",
     dir: "desc",
@@ -70,8 +78,8 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
             return (animal.sex || "").toLowerCase();
           case "currentLocation":
             return (animal.currentLocation || "").toLowerCase();
-          case "a2a2":
-            return animal.a2a2 ? 1 : 0;
+          case "betacasein":
+            return (animal as any).betacasein || "";
           case "polled":
             return animal.polled ? 1 : 0;
           case "dateOfBirth":
@@ -103,8 +111,8 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
               {renderSortButton("Date of Birth", "dateOfBirth")}
             </TableHead>
             <TableHead>{renderSortButton("Location", "currentLocation")}</TableHead>
-            <TableHead>{renderSortButton("A2A2", "a2a2")}</TableHead>
-            <TableHead>{renderSortButton("Polled", "polled")}</TableHead>
+            <TableHead>{renderSortButton("A2 Genotype", "betacasein")}</TableHead>
+            <TableHead>{renderSortButton("Horn Genotype", "polled")}</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -130,7 +138,7 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
                 <TableCell className="capitalize">{animal.sex}</TableCell>
                 <TableCell>{formatDate(animal.dateOfBirth)}</TableCell>
                 <TableCell>{animal.currentLocation || "-"}</TableCell>
-                <TableCell>{animal.a2a2 ? "Yes" : "No"}</TableCell>
+                <TableCell>{(animal as any).betacasein || "Not Tested"}</TableCell>
                 <TableCell>{animal.polled ? "Yes" : "No"}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">

@@ -28,6 +28,7 @@ import { animalStatusEnum, type Animal, type AnimalStatus, type Field } from "@s
 
 type StatusFilter = "all" | AnimalStatus;
 type BooleanFilter = "all" | "yes" | "no";
+type BetacaseinFilter = "all" | "A2/A2" | "A1" | "Not Tested";
 
 export default function Animals() {
   const { toast } = useToast();
@@ -39,10 +40,10 @@ export default function Animals() {
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef">("all");
   const [sexFilter, setSexFilter] = useState<"all" | "cow" | "bull" | "steer" | "stag" | "freemartin">("all");
-  const [a2a2Filter, setA2a2Filter] = useState<BooleanFilter>("all");
   const [polledFilter, setPolledFilter] = useState<BooleanFilter>("all");
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active"); // default "active"
+  const [betacaseinFilter, setBetacaseinFilter] = useState<BetacaseinFilter>("all");
 
   const { data: animals = [], isLoading } = useQuery<Animal[]>({
     queryKey: ["/api/animals"],
@@ -140,10 +141,13 @@ export default function Animals() {
     })();
     const matchesSex = sexFilter === "all" || normalizedSex === sexFilter;
 
-    // A2A2 / Polled filters
-    const matchesA2a2 =
-      a2a2Filter === "all" ||
-      (a2a2Filter === "yes" ? animal.a2a2 === true : animal.a2a2 === false);
+    // CSN2 status filter
+    const rawBetacasein = (anyAnimal.betacasein ?? "") as string;
+    const betacaseinStatus = rawBetacasein || "Not Tested";
+    const matchesBetacasein =
+      betacaseinFilter === "all" || betacaseinStatus === betacaseinFilter;
+
+    // Polled filter
     const matchesPolled =
       polledFilter === "all" ||
       (polledFilter === "yes" ? animal.polled === true : animal.polled === false);
@@ -158,7 +162,7 @@ export default function Animals() {
       matchesSearch &&
       matchesType &&
       matchesSex &&
-      matchesA2a2 &&
+      matchesBetacasein &&
       matchesPolled &&
       matchesField
     );
@@ -279,18 +283,19 @@ export default function Animals() {
           </SelectContent>
         </Select>
 
-        {/* A2A2 filter */}
+        {/* Betacasein filter */}
         <Select
-          value={a2a2Filter}
-          onValueChange={(val: BooleanFilter) => setA2a2Filter(val)}
+          value={betacaseinFilter}
+          onValueChange={(val) => setBetacaseinFilter(val as BetacaseinFilter)}
         >
-          <SelectTrigger className="w-full sm:w-32" data-testid="select-filter-a2a2">
-            <SelectValue placeholder="A2A2" />
+          <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-betacasein">
+            <SelectValue placeholder="A2 Genotype" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="yes">A2A2</SelectItem>
-            <SelectItem value="no">Not A2A2</SelectItem>
+            <SelectItem value="all">All A2 Genotype</SelectItem>
+            <SelectItem value="A2/A2">A2/A2</SelectItem>
+            <SelectItem value="A1">A1</SelectItem>
+            <SelectItem value="Not Tested">Not Tested</SelectItem>
           </SelectContent>
         </Select>
 
@@ -300,10 +305,10 @@ export default function Animals() {
           onValueChange={(val: BooleanFilter) => setPolledFilter(val)}
         >
           <SelectTrigger className="w-full sm:w-32" data-testid="select-filter-polled">
-            <SelectValue placeholder="Polled" />
+            <SelectValue placeholder="Horn Genotype" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="all">All Horn Genotypes</SelectItem>
             <SelectItem value="yes">Polled</SelectItem>
             <SelectItem value="no">Horned</SelectItem>
           </SelectContent>

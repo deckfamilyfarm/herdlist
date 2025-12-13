@@ -172,8 +172,8 @@ export class DatabaseStorage implements IStorage {
       herdName: animals.herdName,
       createdAt: animals.createdAt,
       phenotype: animals.phenotype,
-      a2a2: animals.a2a2,
       polled: animals.polled,
+      betacasein: animals.betacasein,
       currentFieldName: fields.name,
       sireTagNumber: sireAnimals.tagNumber,
       damTagNumber: damAnimals.tagNumber,
@@ -219,8 +219,8 @@ export class DatabaseStorage implements IStorage {
         herdName: animals.herdName,
         createdAt: animals.createdAt,
         phenotype: animals.phenotype,
-        a2a2: animals.a2a2,
         polled: animals.polled,
+        betacasein: animals.betacasein,
       })
       .from(animals)
       .leftJoin(calvingRecords, eq(animals.id, calvingRecords.damId))
@@ -249,8 +249,8 @@ export class DatabaseStorage implements IStorage {
         herdName: animals.herdName,
         createdAt: animals.createdAt,
         phenotype: animals.phenotype,
-        a2a2: animals.a2a2,
         polled: animals.polled,
+        betacasein: animals.betacasein,
         currentFieldName: fields.name,
       })
       .from(animals)

@@ -95,8 +95,8 @@ export const animals = mysqlTable("animals", {
   currentFieldId: varchar("current_field_id", { length: 36 }),
   organic: boolean("organic").default(false),
   phenotype: varchar("phenotype", { length: 1000 }),
-  a2a2: boolean("a2a2").default(false),
   polled: boolean("polled").default(false),
+  betacasein: mysqlEnum("betacasein", ["A2/A2", "A1", "Not Tested"]),
   herdName: herdNameEnum,
   status: mysqlEnum("status", animalStatusEnum).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -362,7 +362,6 @@ export const csvAnimalSchema = z.object({
     .or(z.enum(["male", "female"])) // legacy values
     .or(z.literal("")),
   dateOfBirth: z.string().optional(),
-  breedingMethod: z.string().optional(),
   sireId: z.string().optional(),
   damId: z.string().optional(),
   currentFieldId: z.string().optional(),
@@ -371,14 +370,11 @@ export const csvAnimalSchema = z.object({
     .optional()
     .transform((val) => val?.toLowerCase() === "true"),
   phenotype: z.string().optional(),
-  a2a2: z
-    .string()
-    .optional()
-    .transform((val) => val?.toLowerCase() === "true"),
   polled: z
     .string()
     .optional()
     .transform((val) => val?.toLowerCase() === "true"),
+  betacasein: z.enum(["A2/A2", "A1", "Not Tested"]).optional(),
   herdName: z
     .enum([
       "wet",

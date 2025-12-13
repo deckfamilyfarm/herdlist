@@ -67,14 +67,14 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
   }));
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [breedingForm, setBreedingForm] = useState<{
-    method: BreedingRecord["method"];
+    method: BreedingRecord["method"] | "placeholder";
     breedingDate: string;
     exposureStartDate: string;
     exposureEndDate: string;
     sireId: string;
     notes: string;
   }>(() => ({
-    method: "observed_live_cover",
+    method: "placeholder",
     breedingDate: new Date().toISOString().split("T")[0],
     exposureStartDate: "",
     exposureEndDate: "",
@@ -266,8 +266,8 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                     <span className="font-medium">{animal.organic ? 'Yes' : 'No'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">A2A2</span>
-                    <span className="font-medium">{animal.a2a2 ? 'Yes' : 'No'}</span>
+                    <span className="text-muted-foreground">A2 Genotype</span>
+                    <span className="font-medium">{(animal as any).betacasein || 'Not Tested'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Polled</span>
@@ -327,9 +327,12 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                       }
                     >
                       <SelectTrigger className="w-full" data-testid="select-breeding-method">
-                        <SelectValue placeholder="Select method" />
+                        <SelectValue placeholder="Select method" className="text-muted-foreground" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="placeholder" disabled>
+                          Choose Breeding Method
+                        </SelectItem>
                         <SelectItem value="observed_live_cover">Observed live cover</SelectItem>
                         <SelectItem value="extended_exposure">Extended exposure</SelectItem>
                         <SelectItem value="ai">AI</SelectItem>
@@ -422,7 +425,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                       onClick={() => {
                         setEditingBreedingId(null);
                         setBreedingForm({
-                          method: "observed_live_cover",
+                          method: "placeholder",
                           breedingDate: new Date().toISOString().split("T")[0],
                           exposureStartDate: "",
                           exposureEndDate: "",
@@ -441,8 +444,9 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                       breedingMutation.mutate({
                         id: editingBreedingId ?? undefined,
                         animalId: animal.id,
-                        method: breedingForm.method,
-                        breedingDate: breedingForm.method === "extended_exposure" ? null : breedingForm.breedingDate,
+                        method: breedingForm.method as BreedingRecord["method"],
+                        breedingDate:
+                          breedingForm.method === "extended_exposure" ? null : breedingForm.breedingDate,
                         exposureStartDate:
                           breedingForm.method === "extended_exposure" ? breedingForm.exposureStartDate : null,
                         exposureEndDate:
@@ -451,6 +455,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                         sireId: breedingForm.sireId || null,
                       })
                     }
+                    disabled={breedingForm.method === "placeholder"}
                     data-testid="button-save-breeding"
                   >
                     {editingBreedingId ? "Update Breeding" : "Add Breeding"}

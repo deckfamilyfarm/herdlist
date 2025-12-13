@@ -905,14 +905,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 type: csvRow.type,
                 sex: csvRow.sex,
                 dateOfBirth: csvRow.dateOfBirth || null,
-                breedingMethod: csvRow.breedingMethod || null,
                 sireId: sireId || null,
                 damId: damId || null,
                 currentFieldId: null,
                 herdName: csvRow.herdName || null,
                 organic: csvRow.organic || false,
                 phenotype: csvRow.phenotype || null,
-                a2a2: csvRow.a2a2 || false,
+                betacasein: csvRow.betacasein || null,
                 polled: csvRow.polled || false,
               });
             } catch (error: any) {
