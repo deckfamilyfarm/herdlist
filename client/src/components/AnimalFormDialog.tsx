@@ -505,7 +505,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               data-testid="checkbox-polled"
             />
             <Label htmlFor="polled" className="text-sm font-normal cursor-pointer">
-              Has Polled Genotype
+              Polled
             </Label>
           </div>
           <div className="space-y-2">
