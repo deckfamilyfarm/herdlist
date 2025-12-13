@@ -303,27 +303,27 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                     <CommandEmpty>No sire found.</CommandEmpty>
                     <CommandGroup>
                       <CommandItem
-                        onSelect={() => {
-                          setFormData({ ...formData, sireId: "" });
-                          setSireOpen(false);
-                        }}
-                      >
-                        None
-                      </CommandItem>
-                      {animals
-                        .filter((a) => a.sex === "bull" || a.sex === "male")
-                        .slice()
-                        .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
-                        .map((a) => (
-                          <CommandItem
-                            key={a.id}
-                            value={`${a.tagNumber} ${a.phenotype ?? ""}`}
-                            onSelect={() => {
-                              setFormData({ ...formData, sireId: a.id });
-                              setSireOpen(false);
-                            }}
-                          >
-                            <span className="font-mono">{a.tagNumber}</span>
+                          onSelect={() => {
+                            setFormData({ ...formData, sireId: "" });
+                            setSireOpen(false);
+                          }}
+                        >
+                          None
+                        </CommandItem>
+                        {animals
+                          .filter((a) => a.sex === "bull" || a.sex === "male")
+                          .slice()
+                          .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
+                          .map((a) => (
+                            <CommandItem
+                              key={a.id}
+                              value={`${a.tagNumber} ${a.phenotype ?? ""}`}
+                              onSelect={() => {
+                                setFormData({ ...formData, sireId: a.id });
+                                setSireOpen(false);
+                              }}
+                            >
+                            <span className="font-readable-mono">{a.tagNumber}</span>
                             {a.phenotype ? <span className="ml-2 text-muted-foreground">{a.phenotype}</span> : null}
                           </CommandItem>
                         ))}
@@ -360,27 +360,27 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                     <CommandEmpty>No dam found.</CommandEmpty>
                     <CommandGroup>
                       <CommandItem
-                        onSelect={() => {
-                          setFormData({ ...formData, damId: "" });
-                          setDamOpen(false);
-                        }}
-                      >
-                        None
-                      </CommandItem>
-                      {animals
-                        .filter((a) => a.sex === "cow" || a.sex === "female")
-                        .slice()
-                        .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
-                        .map((a) => (
-                          <CommandItem
-                            key={a.id}
-                            value={`${a.tagNumber} ${a.phenotype ?? ""}`}
-                            onSelect={() => {
-                              setFormData({ ...formData, damId: a.id });
-                              setDamOpen(false);
-                            }}
-                          >
-                            <span className="font-mono">{a.tagNumber}</span>
+                          onSelect={() => {
+                            setFormData({ ...formData, damId: "" });
+                            setDamOpen(false);
+                          }}
+                        >
+                          None
+                        </CommandItem>
+                        {animals
+                          .filter((a) => a.sex === "cow" || a.sex === "female")
+                          .slice()
+                          .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
+                          .map((a) => (
+                            <CommandItem
+                              key={a.id}
+                              value={`${a.tagNumber} ${a.phenotype ?? ""}`}
+                              onSelect={() => {
+                                setFormData({ ...formData, damId: a.id });
+                                setDamOpen(false);
+                              }}
+                            >
+                            <span className="font-readable-mono">{a.tagNumber}</span>
                             {a.phenotype ? <span className="ml-2 text-muted-foreground">{a.phenotype}</span> : null}
                           </CommandItem>
                         ))}
@@ -481,7 +481,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
             </Label>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="betacasein">A2 Genotype (Beta Casein)</Label>
+            <Label htmlFor="betacasein">A2</Label>
             <Select
               value={formData.betacasein || "none"}
               onValueChange={(value) => setFormData({ ...formData, betacasein: value === "none" ? "" : value })}

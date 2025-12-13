@@ -37,6 +37,8 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
     | "sex"
     | "dateOfBirth"
     | "currentLocation"
+    | "sireTagNumber"
+    | "damTagNumber"
     | "betacasein"
     | "polled";
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -78,6 +80,10 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
             return (animal.sex || "").toLowerCase();
           case "currentLocation":
             return (animal.currentLocation || "").toLowerCase();
+          case "sireTagNumber":
+            return ((animal as any).sireTagNumber || "").toLowerCase();
+          case "damTagNumber":
+            return ((animal as any).damTagNumber || "").toLowerCase();
           case "betacasein":
             return (animal as any).betacasein || "";
           case "polled":
@@ -111,8 +117,10 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
               {renderSortButton("Date of Birth", "dateOfBirth")}
             </TableHead>
             <TableHead>{renderSortButton("Location", "currentLocation")}</TableHead>
-            <TableHead>{renderSortButton("A2 Genotype", "betacasein")}</TableHead>
-            <TableHead>{renderSortButton("Horn Genotype", "polled")}</TableHead>
+            <TableHead>{renderSortButton("Sire", "sireTagNumber")}</TableHead>
+            <TableHead>{renderSortButton("Dam", "damTagNumber")}</TableHead>
+            <TableHead>{renderSortButton("A2", "betacasein")}</TableHead>
+            <TableHead>{renderSortButton("Polled", "polled")}</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -126,7 +134,7 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
           ) : (
             sortedAnimals.map((animal) => (
               <TableRow key={animal.id} data-testid={`row-animal-${animal.id}`}>
-                <TableCell className="font-mono font-medium" data-testid={`text-tag-${animal.id}`}>
+                <TableCell className="font-readable-mono font-medium" data-testid={`text-tag-${animal.id}`}>
                   {animal.tagNumber}
                 </TableCell>
                 <TableCell>{animal.phenotype || "-"}</TableCell>
@@ -136,8 +144,46 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
                   </Badge>
                 </TableCell>
                 <TableCell className="capitalize">{animal.sex}</TableCell>
-                <TableCell>{formatDate(animal.dateOfBirth)}</TableCell>
+                <TableCell className="font-readable-mono">{formatDate(animal.dateOfBirth)}</TableCell>
                 <TableCell>{animal.currentLocation || "-"}</TableCell>
+                <TableCell className="font-readable-mono">
+                  {(animal as any).sireTagNumber ? (
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => {
+                        const el = document.querySelector<HTMLInputElement>('[data-testid=\"input-search\"]');
+                        if (el) {
+                          el.value = (animal as any).sireTagNumber as string;
+                          el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                      }}
+                    >
+                      {(animal as any).sireTagNumber}
+                    </button>
+                  ) : (
+                    "-"
+                  )}
+                </TableCell>
+                <TableCell className="font-readable-mono">
+                  {(animal as any).damTagNumber ? (
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => {
+                        const el = document.querySelector<HTMLInputElement>('[data-testid=\"input-search\"]');
+                        if (el) {
+                          el.value = (animal as any).damTagNumber as string;
+                          el.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                      }}
+                    >
+                      {(animal as any).damTagNumber}
+                    </button>
+                  ) : (
+                    "-"
+                  )}
+                </TableCell>
                 <TableCell>{(animal as any).betacasein || "Not Tested"}</TableCell>
                 <TableCell>{animal.polled ? "Yes" : "No"}</TableCell>
                 <TableCell className="text-right">

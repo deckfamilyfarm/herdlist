@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+.font-readable-mono {
+  font-family: "Fira Code", "JetBrains Mono", "Menlo", "Consolas", "SFMono-Regular", monospace;
+  letter-spacing: 0.01em;
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);

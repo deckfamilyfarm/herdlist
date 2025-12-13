@@ -210,7 +210,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-sm mt-1">
-                Tag: <span className="font-mono">{animal.tagNumber}</span> • {age} • {animal.sex}
+                Tag: <span className="font-readable-mono">{animal.tagNumber}</span> • {age} • {animal.sex}
               </DialogDescription>
             </div>
             <Button
@@ -286,11 +286,11 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Sire (Father)</span>
-                    <span className="font-mono font-medium">{enrichedAnimal.sireTagNumber || 'Unknown'}</span>
+                    <span className="font-readable-mono font-medium">{enrichedAnimal.sireTagNumber || 'Unknown'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Dam (Mother)</span>
-                    <span className="font-mono font-medium">{enrichedAnimal.damTagNumber || 'Unknown'}</span>
+                    <span className="font-readable-mono font-medium">{enrichedAnimal.damTagNumber || 'Unknown'}</span>
                   </div>
                   <div className="pt-2">
                     <span className="text-muted-foreground block">Phenotype</span>
@@ -743,7 +743,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                         const enrichedChild = child as Animal & { currentFieldName?: string | null };
                         return (
                             <TableRow key={child.id} data-testid={`row-offspring-${child.id}`}>
-                              <TableCell className="font-mono font-medium">{child.tagNumber}</TableCell>
+                            <TableCell className="font-readable-mono font-medium">{child.tagNumber}</TableCell>
                               <TableCell>{child.phenotype || '-'}</TableCell>
                               <TableCell>
                                 <Badge className={child.type === 'dairy' ? 'bg-chart-1' : 'bg-chart-3'}>
