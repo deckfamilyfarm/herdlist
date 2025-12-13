@@ -87,7 +87,6 @@ export const animals = mysqlTable("animals", {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   tagNumber: varchar("tag_number", { length: 255 }).notNull().unique(),
-  name: varchar("name", { length: 255 }),
   type: varchar("type", { length: 50 }).notNull(),
   sex: varchar("sex", { length: 20 }).notNull(),
   dateOfBirth: date("date_of_birth"),
@@ -96,6 +95,9 @@ export const animals = mysqlTable("animals", {
   damId: varchar("dam_id", { length: 36 }),
   currentFieldId: varchar("current_field_id", { length: 36 }),
   organic: boolean("organic").default(false),
+  phenotype: varchar("phenotype", { length: 1000 }),
+  a2a2: boolean("a2a2").default(false),
+  polled: boolean("polled").default(false),
   herdName: herdNameEnum,
   status: mysqlEnum("status", animalStatusEnum).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -181,6 +183,16 @@ export const slaughterRecords = mysqlTable("slaughter_records", {
   liveWeight: decimal("live_weight", { precision: 10, scale: 2 }),
   hangingWeight: decimal("hanging_weight", { precision: 10, scale: 2 }),
   processor: varchar("processor", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const notes = mysqlTable("notes", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  animalId: varchar("animal_id", { length: 36 }).notNull(),
+  note: varchar("note", { length: 2000 }).notNull(),
+  noteDate: date("note_date").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -288,13 +300,19 @@ export const insertSlaughterRecordSchema = createInsertSchema(slaughterRecords, 
   createdAt: true,
 });
 
+export const insertNoteSchema = createInsertSchema(notes, {
+  noteDate: dateOnlyRequired,
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
 /* =========================
  * CSV Import Schemas
  * ========================= */
 
 export const csvAnimalSchema = z.object({
   tagNumber: z.string().min(1),
-  name: z.string().optional(),
   type: z.enum(["dairy", "beef"]).or(z.literal("")),
   sex: z.enum(["male", "female"]).or(z.literal("")),
   dateOfBirth: z.string().optional(),
@@ -303,6 +321,15 @@ export const csvAnimalSchema = z.object({
   damId: z.string().optional(),
   currentFieldId: z.string().optional(),
   organic: z
+    .string()
+    .optional()
+    .transform((val) => val?.toLowerCase() === "true"),
+  phenotype: z.string().optional(),
+  a2a2: z
+    .string()
+    .optional()
+    .transform((val) => val?.toLowerCase() === "true"),
+  polled: z
     .string()
     .optional()
     .transform((val) => val?.toLowerCase() === "true"),
@@ -443,4 +470,3 @@ export type ImportResult = {
   failed: number;
   errors: string[];
 };
-

@@ -12,6 +12,7 @@ import {
   insertEventSchema,
   insertCalvingRecordSchema,
   insertSlaughterRecordSchema,
+  insertNoteSchema,
   csvAnimalSchema,
   csvPropertySchema,
   csvFieldSchema,
@@ -32,6 +33,8 @@ import {
   type InsertEvent,
   type InsertCalvingRecord,
   type InsertSlaughterRecord,
+  type InsertNote,
+  type Note,
 } from "@shared/schema";
 import { z } from "zod";
 import Papa from "papaparse";
@@ -263,6 +266,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(userWithoutSensitive);
     } catch (error: any) {
       console.error("Error updating user:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Notes routes
+  app.get("/api/notes/animal/:id", isAdmin, async (req, res) => {
+    try {
+      const notes = await storage.getNotesByAnimalId(req.params.id);
+      res.json(notes);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/notes", isAdmin, async (req, res) => {
+    try {
+      const validated: InsertNote = insertNoteSchema.parse(req.body);
+      const note = await storage.createNote(validated);
+      res.status(201).json(note);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.put("/api/notes/:id", isAdmin, async (req, res) => {
+    try {
+      const validated = insertNoteSchema.partial().parse(req.body);
+      const note = await storage.updateNote(req.params.id, validated);
+      if (!note) {
+        res.status(404).json({ message: "Note not found" });
+        return;
+      }
+      res.json(note);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.delete("/api/notes/:id", isAdmin, async (req, res) => {
+    try {
+      await storage.deleteNote(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
   });
@@ -793,7 +847,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               validAnimals.push({
                 tagNumber: csvRow.tagNumber,
-                name: csvRow.name || null,
                 type: csvRow.type,
                 sex: csvRow.sex,
                 dateOfBirth: csvRow.dateOfBirth || null,
@@ -803,6 +856,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 currentFieldId: null,
                 herdName: csvRow.herdName || null,
                 organic: csvRow.organic || false,
+                phenotype: csvRow.phenotype || null,
+                a2a2: csvRow.a2a2 || false,
+                polled: csvRow.polled || false,
               });
             } catch (error: any) {
               result.failed++;

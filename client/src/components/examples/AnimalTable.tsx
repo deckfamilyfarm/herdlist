@@ -4,7 +4,7 @@ const mockAnimals = [
   {
     id: '1',
     tagNumber: 'D-2024-001',
-    name: 'Bessie',
+    phenotype: 'Bessie',
     type: 'dairy',
     sex: 'female',
     currentLocation: 'Home Farm - Pasture A',
@@ -13,7 +13,7 @@ const mockAnimals = [
   {
     id: '2',
     tagNumber: 'B-2024-032',
-    name: 'Thunder',
+    phenotype: 'Thunder',
     type: 'beef',
     sex: 'male',
     currentLocation: 'South Pasture Lease',
@@ -22,6 +22,7 @@ const mockAnimals = [
   {
     id: '3',
     tagNumber: 'D-2023-087',
+    phenotype: 'Unnamed',
     type: 'dairy',
     sex: 'female',
     currentLocation: 'Home Farm - Pasture B',

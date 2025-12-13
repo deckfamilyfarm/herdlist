@@ -5,7 +5,7 @@ import { useState } from 'react';
 const mockAnimal = {
   id: '1',
   tagNumber: 'D-2024-001',
-  name: 'Bessie',
+  phenotype: 'Bessie',
   type: 'dairy',
   sex: 'female',
   dateOfBirth: '2022-03-15',

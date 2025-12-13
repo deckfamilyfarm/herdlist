@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -28,7 +29,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
   const { toast } = useToast();
   const [formData, setFormData] = useState<{
     tagNumber: string;
-    name: string;
     type: string;
     sex: string;
     breedingMethod: string;
@@ -37,11 +37,13 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     damId: string;
     currentFieldId: string;
     organic: boolean;
+    phenotype: string;
+    a2a2: boolean;
+    polled: boolean;
     herdName: string;
     status: AnimalStatus;
   }>({
     tagNumber: "",
-    name: "",
     type: "",
     sex: "",
     breedingMethod: "",
@@ -50,6 +52,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     damId: "",
     currentFieldId: "",
     organic: false,
+    phenotype: "",
+    a2a2: false,
+    polled: false,
     herdName: "",
     status: "active",
   });
@@ -68,7 +73,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     if (animal) {
       setFormData({
         tagNumber: animal.tagNumber,
-        name: animal.name || "",
         type: animal.type,
         sex: animal.sex,
         breedingMethod: animal.breedingMethod || "",
@@ -77,13 +81,15 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         damId: animal.damId || "",
         currentFieldId: animal.currentFieldId || "",
         organic: animal.organic || false,
+        phenotype: animal.phenotype || "",
+        a2a2: Boolean(animal.a2a2),
+        polled: Boolean(animal.polled),
         herdName: animal.herdName || "",
         status: (animal.status as AnimalStatus) ?? "active",
       });
     } else {
       setFormData({
         tagNumber: "",
-        name: "",
         type: "",
         sex: "",
         breedingMethod: "",
@@ -92,6 +98,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         damId: "",
         currentFieldId: "",
         organic: false,
+        phenotype: "",
+        a2a2: false,
+        polled: false,
         herdName: "",
         status: "active",
       });
@@ -114,7 +123,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       onOpenChange(false);
       setFormData({
         tagNumber: "",
-        name: "",
         type: "",
         sex: "",
         breedingMethod: "",
@@ -123,6 +131,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         damId: "",
         currentFieldId: "",
         organic: false,
+        phenotype: "",
+        a2a2: false,
+        polled: false,
         herdName: "",
         status: "active",
       });
@@ -166,14 +177,13 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       tagNumber: formData.tagNumber,
       type: formData.type,
       sex: formData.sex,
-      name: formData.name || undefined,
       breedingMethod: formData.breedingMethod || undefined,
       dateOfBirth: formData.dateOfBirth || undefined,
-      sireId: formData.sireId || undefined,
-      damId: formData.damId || undefined,
+      sireId: formData.sireId || null,
+      damId: formData.damId || null,
       currentFieldId: formData.currentFieldId || undefined,
       organic: formData.organic,
-      herdName: (formData.herdName || undefined) as
+      herdName: (formData.herdName || null) as
         | "wet"
         | "nurse"
         | "finish"
@@ -182,8 +192,11 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         | "yearling"
         | "missing"
         | "bull"
-        | undefined,
+        | null,
       status: formData.status,
+      phenotype: formData.phenotype.trim() || null,
+      a2a2: formData.a2a2,
+      polled: formData.polled,
     };
     
     if (animal) {
@@ -209,15 +222,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               onChange={(e) => setFormData({ ...formData, tagNumber: e.target.value })}
               required
               data-testid="input-tag-number"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="name">Name (Optional)</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              data-testid="input-name"
             />
           </div>
           <div className="space-y-2">
@@ -286,7 +290,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                   .filter((a) => a.sex === "male")
                   .map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.tagNumber} {a.name ? `(${a.name})` : ""}
+                      {a.tagNumber} {a.phenotype ? `(${a.phenotype})` : ""}
                     </SelectItem>
                   ))}
               </SelectContent>
@@ -309,7 +313,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                   .filter((a) => a.sex === "female")
                   .map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.tagNumber} {a.name ? `(${a.name})` : ""}
+                      {a.tagNumber} {a.phenotype ? `(${a.phenotype})` : ""}
                     </SelectItem>
                   ))}
               </SelectContent>
@@ -406,6 +410,39 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               Organic
             </Label>
           </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="a2a2"
+              checked={formData.a2a2}
+              onCheckedChange={(checked) => setFormData({ ...formData, a2a2: checked === true })}
+              data-testid="checkbox-a2a2"
+            />
+            <Label htmlFor="a2a2" className="text-sm font-normal cursor-pointer">
+              A2A2
+            </Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="polled"
+              checked={formData.polled}
+              onCheckedChange={(checked) => setFormData({ ...formData, polled: checked === true })}
+              data-testid="checkbox-polled"
+            />
+            <Label htmlFor="polled" className="text-sm font-normal cursor-pointer">
+              Polled
+            </Label>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phenotype">Phenotype / Notes</Label>
+            <Textarea
+              id="phenotype"
+              placeholder="Describe phenotype details"
+              value={formData.phenotype}
+              onChange={(e) => setFormData({ ...formData, phenotype: e.target.value })}
+              data-testid="textarea-phenotype"
+              rows={3}
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
               Cancel
@@ -419,4 +456,3 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     </Dialog>
   );
 }
-

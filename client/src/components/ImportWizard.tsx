@@ -21,7 +21,20 @@ const DATA_TYPES = [
 ] as const;
 
 const CSV_TEMPLATES: Record<string, string[]> = {
-  animals: ["tagNumber", "name", "type", "sex", "dateOfBirth", "breedingMethod", "sireTag", "damTag", "herdName", "organic"],
+  animals: [
+    "tagNumber",
+    "type",
+    "sex",
+    "dateOfBirth",
+    "breedingMethod",
+    "sireTag",
+    "damTag",
+    "herdName",
+    "organic",
+    "phenotype",
+    "a2a2",
+    "polled",
+  ],
   properties: ["name", "isLeased", "leaseStartDate", "leaseEndDate", "leaseholder"],
   fields: ["name", "propertyName", "capacity"],
   vaccinations: ["animalTag", "vaccineName", "administeredDate", "administeredBy", "nextDueDate"],
@@ -38,6 +51,9 @@ const FORMAT_NOTES: Record<string, string[]> = {
     "breedingMethod: live-cover or ai",
     "herdName: wet, nurse, finish, main, grafting, or yearlings",
     "organic: true or false",
+    "a2a2: true or false",
+    "polled: true or false",
+    "phenotype: free text",
     "Use the Movements feature to assign animals to fields",
   ],
   properties: [

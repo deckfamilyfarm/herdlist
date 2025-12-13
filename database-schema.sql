@@ -5,7 +5,6 @@
 CREATE TABLE IF NOT EXISTS `animals` (
   `id` VARCHAR(36) PRIMARY KEY,
   `tag_number` VARCHAR(255) NOT NULL UNIQUE,
-  `name` VARCHAR(255),
   `type` VARCHAR(50) NOT NULL,
   `sex` VARCHAR(20) NOT NULL,
   `date_of_birth` DATE,
@@ -14,7 +13,11 @@ CREATE TABLE IF NOT EXISTS `animals` (
   `dam_id` VARCHAR(36),
   `current_field_id` VARCHAR(36),
   `organic` BOOLEAN DEFAULT FALSE,
-  `herd_name` ENUM('wet', 'nurse', 'finish', 'main', 'grafting', 'yearlings'),
+  `phenotype` VARCHAR(1000),
+  `a2a2` BOOLEAN DEFAULT FALSE,
+  `polled` BOOLEAN DEFAULT FALSE,
+  `herd_name` ENUM('wet', 'nurse', 'finish', 'main', 'grafting', 'yearling', 'missing', 'bull'),
+  `status` ENUM('active', 'slaughtered', 'sold', 'died', 'missing') NOT NULL DEFAULT 'active',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -72,6 +75,16 @@ CREATE TABLE IF NOT EXISTS `events` (
   `event_type` VARCHAR(100) NOT NULL,
   `event_date` DATE NOT NULL,
   `description` VARCHAR(1000),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Notes Table
+CREATE TABLE IF NOT EXISTS `notes` (
+  `id` VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci PRIMARY KEY,
+  `animal_id` VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `note` VARCHAR(2000) NOT NULL,
+  `note_date` DATE NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

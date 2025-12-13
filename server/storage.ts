@@ -13,6 +13,7 @@ import {
   calvingRecords,
   slaughterRecords,
   users,
+  notes,
   type Animal,
   type InsertAnimal,
   type Property,
@@ -30,6 +31,8 @@ import {
   type SlaughterRecord,
   type InsertSlaughterRecord,
   type User,
+  type Note,
+  type InsertNote,
 } from "@shared/schema";
 
 console.log("DB check:", typeof (db as any).insert, typeof (db as any).select);
@@ -76,6 +79,12 @@ export interface IStorage {
   getEventsByAnimalId(animalId: string): Promise<Event[]>;
   updateEvent(id: string, event: Partial<InsertEvent>): Promise<Event | undefined>;
   deleteEvent(id: string): Promise<void>;
+
+  // Notes
+  createNote(note: InsertNote): Promise<Note>;
+  getNotesByAnimalId(animalId: string): Promise<Note[]>;
+  updateNote(id: string, note: Partial<InsertNote>): Promise<Note | undefined>;
+  deleteNote(id: string): Promise<void>;
 
   // Calving Records
   createCalvingRecord(record: InsertCalvingRecord): Promise<CalvingRecord>;
@@ -144,7 +153,6 @@ export class DatabaseStorage implements IStorage {
     .select({
       id: animals.id,
       tagNumber: animals.tagNumber,
-      name: animals.name,
       type: animals.type,
       sex: animals.sex,
       dateOfBirth: animals.dateOfBirth,
@@ -153,7 +161,11 @@ export class DatabaseStorage implements IStorage {
       sireId: animals.sireId,
       damId: animals.damId,
       currentFieldId: animals.currentFieldId,
+      herdName: animals.herdName,
       createdAt: animals.createdAt,
+      phenotype: animals.phenotype,
+      a2a2: animals.a2a2,
+      polled: animals.polled,
       currentFieldName: fields.name,
       sireTagNumber: sireAnimals.tagNumber,
       damTagNumber: damAnimals.tagNumber,
@@ -188,17 +200,20 @@ export class DatabaseStorage implements IStorage {
 
     const result = await db
       .select({
-        id: animals.id,
-        tagNumber: animals.tagNumber,
-        name: animals.name,
-        type: animals.type,
-        sex: animals.sex,
-        dateOfBirth: animals.dateOfBirth,
+      id: animals.id,
+      tagNumber: animals.tagNumber,
+      type: animals.type,
+      sex: animals.sex,
+      dateOfBirth: animals.dateOfBirth,
         breedingMethod: animals.breedingMethod,
         sireId: animals.sireId,
         damId: animals.damId,
         currentFieldId: animals.currentFieldId,
+        herdName: animals.herdName,
         createdAt: animals.createdAt,
+        phenotype: animals.phenotype,
+        a2a2: animals.a2a2,
+        polled: animals.polled,
       })
       .from(animals)
       .leftJoin(calvingRecords, eq(animals.id, calvingRecords.damId))
@@ -218,15 +233,18 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: animals.id,
         tagNumber: animals.tagNumber,
-        name: animals.name,
-        type: animals.type,
-        sex: animals.sex,
-        dateOfBirth: animals.dateOfBirth,
+      type: animals.type,
+      sex: animals.sex,
+      dateOfBirth: animals.dateOfBirth,
         breedingMethod: animals.breedingMethod,
         sireId: animals.sireId,
         damId: animals.damId,
         currentFieldId: animals.currentFieldId,
+        herdName: animals.herdName,
         createdAt: animals.createdAt,
+        phenotype: animals.phenotype,
+        a2a2: animals.a2a2,
+        polled: animals.polled,
         currentFieldName: fields.name,
       })
       .from(animals)
@@ -535,6 +553,33 @@ export class DatabaseStorage implements IStorage {
     await db.delete(slaughterRecords).where(eq(slaughterRecords.id, id));
   }
 
+  // ---------- Notes ----------
+
+  async createNote(note: InsertNote): Promise<Note> {
+    const id = crypto.randomUUID();
+    await db.insert(notes).values({ ...(note as any), id });
+    const [created] = await db.select().from(notes).where(eq(notes.id, id));
+    return created as Note;
+  }
+
+  async getNotesByAnimalId(animalId: string): Promise<Note[]> {
+    return await db
+      .select()
+      .from(notes)
+      .where(eq(notes.animalId, animalId))
+      .orderBy(desc(notes.noteDate), desc(notes.createdAt));
+  }
+
+  async updateNote(id: string, note: Partial<InsertNote>): Promise<Note | undefined> {
+    await db.update(notes).set(note).where(eq(notes.id, id));
+    const [updated] = await db.select().from(notes).where(eq(notes.id, id));
+    return updated as Note | undefined;
+  }
+
+  async deleteNote(id: string): Promise<void> {
+    await db.delete(notes).where(eq(notes.id, id));
+  }
+
   // ---------- Bulk Import ----------
 
   async bulkCreateAnimals(animalList: InsertAnimal[]): Promise<Animal[]> {
@@ -735,4 +780,3 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
-

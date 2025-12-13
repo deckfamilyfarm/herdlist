@@ -22,7 +22,7 @@ export function IndividualAnimalSelector({
   const filteredAnimals = animals.filter(
     (animal) =>
       animal.tagNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      animal.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      animal.phenotype?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleToggle = (id: string) => {
@@ -55,7 +55,7 @@ export function IndividualAnimalSelector({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by tag or name..."
+            placeholder="Search by tag or phenotype..."
             className="pl-9"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -91,8 +91,8 @@ export function IndividualAnimalSelector({
               <label htmlFor={animal.id} className="flex-1 cursor-pointer">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm font-medium">{animal.tagNumber}</span>
-                  {animal.name && (
-                    <span className="text-sm text-muted-foreground">({animal.name})</span>
+                  {animal.phenotype && (
+                    <span className="text-sm text-muted-foreground">({animal.phenotype})</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1">

@@ -3,6 +3,7 @@ import { AnimalFormDialog } from "@/components/AnimalFormDialog";
 import { AnimalDetailDialog } from "@/components/AnimalDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -10,14 +11,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { animalStatusEnum, type Animal, type AnimalStatus } from "@shared/schema";
+import { animalStatusEnum, type Animal, type AnimalStatus, type Field } from "@shared/schema";
 
 type StatusFilter = "all" | AnimalStatus;
+type BooleanFilter = "all" | "yes" | "no";
 
 export default function Animals() {
   const { toast } = useToast();
@@ -28,11 +38,18 @@ export default function Animals() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef">("all");
-  const [locationFilter, setLocationFilter] = useState<"all" | "home" | "lease">("all");
+  const [sexFilter, setSexFilter] = useState<"all" | "male" | "female">("all");
+  const [a2a2Filter, setA2a2Filter] = useState<BooleanFilter>("all");
+  const [polledFilter, setPolledFilter] = useState<BooleanFilter>("all");
+  const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active"); // default "active"
 
   const { data: animals = [], isLoading } = useQuery<Animal[]>({
     queryKey: ["/api/animals"],
+  });
+
+  const { data: fields = [] } = useQuery<Field[]>({
+    queryKey: ['/api/fields'],
   });
 
   const deleteAnimalMutation = useMutation({
@@ -110,24 +127,44 @@ export default function Animals() {
     const matchesSearch =
       !searchLower ||
       animal.tagNumber.toLowerCase().includes(searchLower) ||
-      (animal.name ?? "").toLowerCase().includes(searchLower);
+      (animal.phenotype ?? "").toLowerCase().includes(searchLower);
 
     // Type filter (dairy / beef / all)
     const matchesType = typeFilter === "all" || animal.type === typeFilter;
 
-    // Location filter (home / lease / all)
-    const fieldName = (anyAnimal.currentFieldName?.toLowerCase?.() ?? "") as string;
-    let matchesLocation = true;
-    if (locationFilter !== "all") {
-      if (locationFilter === "home") {
-        // treat anything not explicitly "lease" as home
-        matchesLocation = !fieldName.includes("lease");
-      } else if (locationFilter === "lease") {
-        matchesLocation = fieldName.includes("lease");
-      }
-    }
+    // Sex filter
+    const matchesSex = sexFilter === "all" || animal.sex === sexFilter;
 
-    return matchesStatus && matchesSearch && matchesType && matchesLocation;
+    // A2A2 / Polled filters
+    const matchesA2a2 =
+      a2a2Filter === "all" ||
+      (a2a2Filter === "yes" ? animal.a2a2 === true : animal.a2a2 === false);
+    const matchesPolled =
+      polledFilter === "all" ||
+      (polledFilter === "yes" ? animal.polled === true : animal.polled === false);
+
+    // Field filter: if any selected, require match
+    const matchesField =
+      selectedFieldIds.size === 0 ||
+      (animal.currentFieldId && selectedFieldIds.has(animal.currentFieldId));
+
+    return (
+      matchesStatus &&
+      matchesSearch &&
+      matchesType &&
+      matchesSex &&
+      matchesA2a2 &&
+      matchesPolled &&
+      matchesField
+    );
+  });
+
+  const displayAnimals = filteredAnimals.map((animal) => {
+    const anyAnimal = animal as any;
+    return {
+      ...animal,
+      currentLocation: anyAnimal.currentFieldName ?? anyAnimal.currentLocation ?? "-",
+    };
   });
 
   return (
@@ -150,13 +187,59 @@ export default function Animals() {
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by tag number or name..."
+            placeholder="Search by tag number or phenotype..."
             className="pl-9"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             data-testid="input-search"
           />
         </div>
+
+        {/* Location filter */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="min-w-[180px]" data-testid="dropdown-fields">
+              {selectedFieldIds.size === 0
+                ? "All locations"
+                : `${selectedFieldIds.size} location${selectedFieldIds.size > 1 ? "s" : ""} selected`}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-64 max-h-80 overflow-y-auto">
+            <DropdownMenuLabel>Locations</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem
+              checked={selectedFieldIds.size === 0}
+              onCheckedChange={() => setSelectedFieldIds(new Set())}
+              data-testid="checkbox-field-all"
+            >
+              All locations
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            {fields.length === 0 ? (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">No fields available</div>
+            ) : (
+              fields.map((field) => (
+                <DropdownMenuCheckboxItem
+                  key={field.id}
+                  checked={selectedFieldIds.has(field.id)}
+                  onCheckedChange={(val) => {
+                    setSelectedFieldIds((prev) => {
+                      const next = new Set(prev);
+                      if (val === true) {
+                        next.add(field.id);
+                      } else {
+                        next.delete(field.id);
+                      }
+                      return next;
+                    });
+                  }}
+                  data-testid={`checkbox-field-${field.id}`}
+                >
+                  {field.name}
+                </DropdownMenuCheckboxItem>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Type filter */}
         <Select
@@ -173,18 +256,48 @@ export default function Animals() {
           </SelectContent>
         </Select>
 
-        {/* Location filter */}
+        {/* Sex filter */}
         <Select
-          value={locationFilter}
-          onValueChange={(val: "all" | "home" | "lease") => setLocationFilter(val)}
+          value={sexFilter}
+          onValueChange={(val: "all" | "male" | "female") => setSexFilter(val)}
         >
-          <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-location">
-            <SelectValue placeholder="Location" />
+          <SelectTrigger className="w-full sm:w-36" data-testid="select-filter-sex">
+            <SelectValue placeholder="Sex" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Locations</SelectItem>
-            <SelectItem value="home">Home Farm</SelectItem>
-            <SelectItem value="lease">Lease Properties</SelectItem>
+            <SelectItem value="all">All Sexes</SelectItem>
+            <SelectItem value="female">Female</SelectItem>
+            <SelectItem value="male">Male</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* A2A2 filter */}
+        <Select
+          value={a2a2Filter}
+          onValueChange={(val: BooleanFilter) => setA2a2Filter(val)}
+        >
+          <SelectTrigger className="w-full sm:w-32" data-testid="select-filter-a2a2">
+            <SelectValue placeholder="A2A2" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="yes">A2A2</SelectItem>
+            <SelectItem value="no">Not A2A2</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Polled filter */}
+        <Select
+          value={polledFilter}
+          onValueChange={(val: BooleanFilter) => setPolledFilter(val)}
+        >
+          <SelectTrigger className="w-full sm:w-32" data-testid="select-filter-polled">
+            <SelectValue placeholder="Polled" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="yes">Polled</SelectItem>
+            <SelectItem value="no">Horned</SelectItem>
           </SelectContent>
         </Select>
 
@@ -210,13 +323,60 @@ export default function Animals() {
         </Select>
       </div>
 
+      <div className="flex flex-wrap gap-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="min-w-[180px]" data-testid="dropdown-fields">
+              {selectedFieldIds.size === 0
+                ? "All locations"
+                : `${selectedFieldIds.size} location${selectedFieldIds.size > 1 ? "s" : ""} selected`}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-64 max-h-80 overflow-y-auto">
+            <DropdownMenuLabel>Locations</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem
+              checked={selectedFieldIds.size === 0}
+              onCheckedChange={() => setSelectedFieldIds(new Set())}
+              data-testid="checkbox-field-all"
+            >
+              All locations
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            {fields.length === 0 ? (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">No fields available</div>
+            ) : (
+              fields.map((field) => (
+                <DropdownMenuCheckboxItem
+                  key={field.id}
+                  checked={selectedFieldIds.has(field.id)}
+                  onCheckedChange={(val) => {
+                    setSelectedFieldIds((prev) => {
+                      const next = new Set(prev);
+                      if (val === true) {
+                        next.add(field.id);
+                      } else {
+                        next.delete(field.id);
+                      }
+                      return next;
+                    });
+                  }}
+                  data-testid={`checkbox-field-${field.id}`}
+                >
+                  {field.name}
+                </DropdownMenuCheckboxItem>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       {isLoading ? (
         <div className="flex items-center justify-center h-64">
           <p className="text-muted-foreground">Loading animals...</p>
         </div>
       ) : (
         <AnimalTable
-          animals={filteredAnimals as Animal[]}
+          animals={displayAnimals as Animal[]}
           onView={handleViewAnimal}
           onEdit={handleEditAnimal}
           onDelete={handleDeleteAnimal}
@@ -240,4 +400,3 @@ export default function Animals() {
     </div>
   );
 }
-

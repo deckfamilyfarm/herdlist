@@ -127,7 +127,7 @@ export default function SlaughterReport() {
     const animal = animals.find((a) => a.id === animalId);
     if (!animal) return animalId; // fallback to UUID if somehow missing
     return `${animal.tagNumber}${
-      animal.name ? ` (${animal.name})` : ""
+      animal.phenotype ? ` (${animal.phenotype})` : ""
     }`;
   };
 
@@ -294,7 +294,7 @@ export default function SlaughterReport() {
                   {animals.map((animal) => (
                     <SelectItem key={animal.id} value={animal.id}>
                       {animal.tagNumber}
-                      {animal.name ? ` (${animal.name})` : ""}
+                      {animal.phenotype ? ` (${animal.phenotype})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -380,4 +380,3 @@ export default function SlaughterReport() {
     </div>
   );
 }
-

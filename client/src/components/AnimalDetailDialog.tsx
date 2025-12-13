@@ -18,10 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Calendar, Syringe, Baby, Activity, Edit } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { VaccinationFormDialog } from "./VaccinationFormDialog";
-import type { Vaccination, Event, CalvingRecord, Animal, AnimalStatus } from "@shared/schema";
+import type { Vaccination, Event, CalvingRecord, Animal, AnimalStatus, Note } from "@shared/schema";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Trash2, Pencil } from "lucide-react";
 
 interface AnimalDetailDialogProps {
   open: boolean;
@@ -50,10 +54,21 @@ const statusVariant: Partial<
 
 export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: AnimalDetailDialogProps) {
   const [vaccinationDialogOpen, setVaccinationDialogOpen] = useState(false);
+  const [noteForm, setNoteForm] = useState<{ noteDate: string; note: string }>(() => ({
+    noteDate: new Date().toISOString().split("T")[0],
+    note: "",
+  }));
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const enrichedAnimal = animal as Animal & { 
     currentFieldName?: string | null; 
     sireTagNumber?: string | null; 
     damTagNumber?: string | null; 
+  };
+
+  const formatDate = (value: Animal["dateOfBirth"]) => {
+    if (!value) return "Not recorded";
+    const str = value instanceof Date ? value.toISOString() : String(value);
+    return str.includes("T") ? str.split("T")[0] : str;
   };
 
   const { data: vaccinations = [], isLoading: vaccinationsLoading } = useQuery<Vaccination[]>({
@@ -69,6 +84,43 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
   const { data: calvingRecords = [], isLoading: calvingLoading } = useQuery<CalvingRecord[]>({
     queryKey: ['/api/calving-records/dam', animal.id],
     enabled: open && animal.sex === 'female',
+  });
+
+  const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
+    queryKey: ['/api/notes/animal', animal.id],
+    enabled: open,
+  });
+
+  const addNoteMutation = useMutation({
+    mutationFn: async (data: { id?: string; noteDate: string; note: string }) => {
+      if (data.id) {
+        const res = await apiRequest("PUT", `/api/notes/${data.id}`, {
+          noteDate: data.noteDate,
+          note: data.note,
+        });
+        return res.json();
+      }
+      const res = await apiRequest("POST", "/api/notes", {
+        animalId: animal.id,
+        noteDate: data.noteDate,
+        note: data.note,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/notes/animal', animal.id] });
+      setNoteForm({ noteDate: new Date().toISOString().split("T")[0], note: "" });
+      setEditingNoteId(null);
+    },
+  });
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/notes/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/notes/animal', animal.id] });
+    },
   });
 
   const { data: offspring = [], isLoading: offspringLoading } = useQuery<Animal[]>({
@@ -87,7 +139,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
           <div className="flex items-start justify-between">
             <div>
               <DialogTitle className="text-2xl flex items-center gap-3">
-                {animal.name || animal.tagNumber}
+                {animal.phenotype || animal.tagNumber}
                 <Badge className={animal.type === 'dairy' ? 'bg-chart-1' : 'bg-chart-3'}>
                   {animal.type}
                 </Badge>
@@ -116,8 +168,9 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
         </DialogHeader>
 
         <Tabs defaultValue="overview" className="mt-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="notes" data-testid="tab-notes">Notes</TabsTrigger>
             <TabsTrigger value="vaccinations" data-testid="tab-vaccinations">Vaccinations</TabsTrigger>
             <TabsTrigger value="offspring" data-testid="tab-offspring">Offspring</TabsTrigger>
             <TabsTrigger value="events" data-testid="tab-events">Events</TabsTrigger>
@@ -132,7 +185,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date of Birth</span>
-                    <span className="font-medium">{animal.dateOfBirth || 'Not recorded'}</span>
+                    <span className="font-medium">{formatDate(animal.dateOfBirth)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Current Location</span>
@@ -151,6 +204,14 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Organic</span>
                     <span className="font-medium">{animal.organic ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">A2A2</span>
+                    <span className="font-medium">{animal.a2a2 ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Polled</span>
+                    <span className="font-medium">{animal.polled ? 'Yes' : 'No'}</span>
                   </div>
                   {/* ✅ Status row */}
                   <div className="flex justify-between">
@@ -175,9 +236,133 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                     <span className="text-muted-foreground">Dam (Mother)</span>
                     <span className="font-mono font-medium">{enrichedAnimal.damTagNumber || 'Unknown'}</span>
                   </div>
+                  <div className="pt-2">
+                    <span className="text-muted-foreground block">Phenotype</span>
+                    <span className="font-medium block mt-1">{animal.phenotype || 'Not recorded'}</span>
+                  </div>
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="notes" className="mt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-3 gap-3 items-end">
+                  <div className="space-y-1">
+                    <label className="text-sm text-muted-foreground" htmlFor="noteDate">Date</label>
+                    <Input
+                      id="noteDate"
+                      type="date"
+                      value={noteForm.noteDate}
+                      onChange={(e) => setNoteForm((prev) => ({ ...prev, noteDate: e.target.value }))}
+                      data-testid="input-note-date"
+                    />
+                  </div>
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-sm text-muted-foreground" htmlFor="noteText">Note</label>
+                    <Textarea
+                      id="noteText"
+                      rows={3}
+                      placeholder="Add note about this animal..."
+                      value={noteForm.note}
+                      onChange={(e) => setNoteForm((prev) => ({ ...prev, note: e.target.value }))}
+                      data-testid="textarea-note"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <div className="flex gap-2">
+                    {editingNoteId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingNoteId(null);
+                          setNoteForm({ noteDate: new Date().toISOString().split("T")[0], note: "" });
+                        }}
+                        data-testid="button-cancel-edit-note"
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => addNoteMutation.mutate({ ...noteForm, id: editingNoteId ?? undefined })}
+                      disabled={!noteForm.note.trim()}
+                      data-testid="button-add-note"
+                    >
+                      {editingNoteId ? "Update Note" : "Add Note"}
+                    </Button>
+                  </div>
+                </div>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Note</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {notesLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center text-muted-foreground">
+                          Loading...
+                        </TableCell>
+                      </TableRow>
+                    ) : notes.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center text-muted-foreground">
+                          No notes yet
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      notes.map((note) => (
+                        <TableRow key={note.id}>
+                          <TableCell className="font-mono font-medium">{note.noteDate}</TableCell>
+                          <TableCell className="whitespace-pre-wrap">
+                            <div className="flex items-start justify-between gap-2">
+                              <span>{note.note}</span>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingNoteId(note.id);
+                                    setNoteForm({
+                                      noteDate: note.noteDate,
+                                      note: note.note,
+                                    });
+                                  }}
+                                  data-testid={`button-edit-note-${note.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteNoteMutation.mutate(note.id)}
+                                  data-testid={`button-delete-note-${note.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="vaccinations" className="mt-4">
@@ -261,16 +446,16 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                       offspring.map((child) => {
                         const enrichedChild = child as Animal & { currentFieldName?: string | null };
                         return (
-                          <TableRow key={child.id} data-testid={`row-offspring-${child.id}`}>
-                            <TableCell className="font-mono font-medium">{child.tagNumber}</TableCell>
-                            <TableCell>{child.name || '-'}</TableCell>
-                            <TableCell>
-                              <Badge className={child.type === 'dairy' ? 'bg-chart-1' : 'bg-chart-3'}>
-                                {child.type}
+                            <TableRow key={child.id} data-testid={`row-offspring-${child.id}`}>
+                              <TableCell className="font-mono font-medium">{child.tagNumber}</TableCell>
+                              <TableCell>{child.phenotype || '-'}</TableCell>
+                              <TableCell>
+                                <Badge className={child.type === 'dairy' ? 'bg-chart-1' : 'bg-chart-3'}>
+                                  {child.type}
                               </Badge>
                             </TableCell>
                             <TableCell className="capitalize">{child.sex}</TableCell>
-                            <TableCell>{child.dateOfBirth || 'Not recorded'}</TableCell>
+                            <TableCell>{formatDate(child.dateOfBirth)}</TableCell>
                             <TableCell>{enrichedChild.currentFieldName || 'Not assigned'}</TableCell>
                           </TableRow>
                         );
@@ -330,4 +515,3 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     </Dialog>
   );
 }
-
