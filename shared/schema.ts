@@ -90,7 +90,6 @@ export const animals = mysqlTable("animals", {
   type: varchar("type", { length: 50 }).notNull(),
   sex: varchar("sex", { length: 20 }).notNull(),
   dateOfBirth: date("date_of_birth"),
-  breedingMethod: varchar("breeding_method", { length: 100 }),
   sireId: varchar("sire_id", { length: 36 }),
   damId: varchar("dam_id", { length: 36 }),
   currentFieldId: varchar("current_field_id", { length: 36 }),

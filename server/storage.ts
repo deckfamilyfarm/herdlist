@@ -165,8 +165,7 @@ export class DatabaseStorage implements IStorage {
       type: animals.type,
       sex: animals.sex,
       dateOfBirth: animals.dateOfBirth,
-	  status: animals.status,
-      breedingMethod: animals.breedingMethod,
+      status: animals.status,
       sireId: animals.sireId,
       damId: animals.damId,
       currentFieldId: animals.currentFieldId,
@@ -214,7 +213,6 @@ export class DatabaseStorage implements IStorage {
       type: animals.type,
       sex: animals.sex,
       dateOfBirth: animals.dateOfBirth,
-        breedingMethod: animals.breedingMethod,
         sireId: animals.sireId,
         damId: animals.damId,
         currentFieldId: animals.currentFieldId,
@@ -240,12 +238,11 @@ export class DatabaseStorage implements IStorage {
   async getOffspringByParentId(parentId: string): Promise<Animal[]> {
     const result = await db
       .select({
-        id: animals.id,
-        tagNumber: animals.tagNumber,
+      id: animals.id,
+      tagNumber: animals.tagNumber,
       type: animals.type,
       sex: animals.sex,
       dateOfBirth: animals.dateOfBirth,
-        breedingMethod: animals.breedingMethod,
         sireId: animals.sireId,
         damId: animals.damId,
         currentFieldId: animals.currentFieldId,

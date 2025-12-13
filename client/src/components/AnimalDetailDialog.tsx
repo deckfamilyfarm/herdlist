@@ -251,12 +251,6 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                     <span className="font-medium">{enrichedAnimal.currentFieldName || 'Not assigned'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Breeding Method</span>
-                    <span className="font-medium capitalize">
-                      {animal.breedingMethod?.replace('-', ' ') || 'Not recorded'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
                     <span className="text-muted-foreground">Herd Name</span>
                     <span className="font-medium capitalize">{animal.herdName || 'Not assigned'}</span>
                   </div>
@@ -714,7 +708,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tag Number</TableHead>
-                      <TableHead>Name</TableHead>
+                      <TableHead>Phenotype</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Sex</TableHead>
                       <TableHead>Date of Birth</TableHead>

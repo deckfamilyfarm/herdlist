@@ -44,7 +44,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     tagNumber: string;
     type: string;
     sex: string;
-    breedingMethod: string;
     dateOfBirth: string;
     sireId: string;
     damId: string;
@@ -59,7 +58,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     tagNumber: "",
     type: "",
     sex: "",
-    breedingMethod: "",
     dateOfBirth: "",
     sireId: "",
     damId: "",
@@ -90,7 +88,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         tagNumber: animal.tagNumber,
         type: animal.type,
         sex: animal.sex,
-        breedingMethod: animal.breedingMethod || "",
         dateOfBirth: (animal.dateOfBirth as any as string) || "",
         sireId: animal.sireId || "",
         damId: animal.damId || "",
@@ -107,7 +104,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         tagNumber: "",
         type: "",
         sex: "",
-        breedingMethod: "",
         dateOfBirth: "",
         sireId: "",
         damId: "",
@@ -138,10 +134,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       onOpenChange(false);
       setFormData({
         tagNumber: "",
-        type: "",
-        sex: "",
-        breedingMethod: "",
-        dateOfBirth: "",
+      type: "",
+      sex: "",
+      dateOfBirth: "",
         sireId: "",
         damId: "",
         currentFieldId: "",
@@ -260,21 +255,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               <SelectContent>
                 <SelectItem value="male">Male</SelectItem>
                 <SelectItem value="female">Female</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="breedingMethod">Breeding Method</Label>
-            <Select
-              value={formData.breedingMethod}
-              onValueChange={(value) => setFormData({ ...formData, breedingMethod: value })}
-            >
-              <SelectTrigger id="breedingMethod" data-testid="select-breeding-method">
-                <SelectValue placeholder="Select method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="live-cover">Live Cover</SelectItem>
-                <SelectItem value="ai">Artificial Insemination</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -516,7 +496,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
             </Label>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phenotype">Phenotype / Notes</Label>
+            <Label htmlFor="phenotype">Phenotype</Label>
             <Textarea
               id="phenotype"
               placeholder="Describe phenotype details"

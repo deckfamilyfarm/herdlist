@@ -61,7 +61,6 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
               </button>
             </TableHead>
             <TableHead>Location</TableHead>
-            <TableHead>Breeding Method</TableHead>
             <TableHead>A2A2</TableHead>
             <TableHead>Polled</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -89,7 +88,6 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
                 <TableCell className="capitalize">{animal.sex}</TableCell>
                 <TableCell>{formatDate(animal.dateOfBirth)}</TableCell>
                 <TableCell>{animal.currentLocation || "-"}</TableCell>
-                <TableCell>{animal.breedingMethod || "-"}</TableCell>
                 <TableCell>{animal.a2a2 ? "Yes" : "No"}</TableCell>
                 <TableCell>{animal.polled ? "Yes" : "No"}</TableCell>
                 <TableCell className="text-right">
