@@ -36,7 +36,7 @@ const CSV_TEMPLATES: Record<string, string[]> = {
     "polled",
   ],
   properties: ["name", "isLeased", "leaseStartDate", "leaseEndDate", "leaseholder"],
-  fields: ["name", "propertyName", "capacity"],
+  fields: ["name", "propertyName", "capacity", "acres"],
   vaccinations: ["animalTag", "vaccineName", "administeredDate", "administeredBy", "nextDueDate"],
   events: ["animalTag", "eventType", "eventDate", "description"],
   "calving-records": ["damTag", "calvingDate", "calfTag", "calfSex", "notes"],
@@ -63,6 +63,7 @@ const FORMAT_NOTES: Record<string, string[]> = {
   fields: [
     "propertyName must match existing property",
     "capacity: number",
+    "acres: number (optional)",
   ],
   vaccinations: [
     "animalTag must match existing animal",

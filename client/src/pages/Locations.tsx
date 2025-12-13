@@ -3,7 +3,8 @@ import { PropertyFormDialog } from "@/components/PropertyFormDialog";
 import { FieldFormDialog } from "@/components/FieldFormDialog";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import type { Property, Field, Animal } from "@shared/schema";
 import { useMemo, useState } from "react";
 
@@ -13,6 +14,7 @@ export default function Locations() {
   const [fieldDialogOpen, setFieldDialogOpen] = useState(false);
   const [selectedField, setSelectedField] = useState<Field | undefined>(undefined);
   const [selectedPropertyIdForField, setSelectedPropertyIdForField] = useState<string | undefined>(undefined);
+  const queryClient = useQueryClient();
 
   const { data: properties = [], isLoading: propertiesLoading } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
@@ -24,6 +26,20 @@ export default function Locations() {
 
   const { data: animals = [], isLoading: animalsLoading } = useQuery<Animal[]>({
     queryKey: ['/api/animals'],
+  });
+
+  const deleteFieldMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/fields/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/fields'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/properties'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
+    },
+    onError: (error: any) => {
+      alert(error?.message || "You must remove animals from this field before deleting it");
+    },
   });
 
   const propertiesWithFields = useMemo(() => {
@@ -73,6 +89,11 @@ export default function Locations() {
     setFieldDialogOpen(true);
   };
 
+  const handleDeleteField = async (fieldId: string) => {
+    if (!confirm("Are you sure you want to delete this field?")) return;
+    await deleteFieldMutation.mutateAsync(fieldId);
+  };
+
   if (propertiesLoading || fieldsLoading || animalsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -102,6 +123,7 @@ export default function Locations() {
             onAddField={handleAddField}
             onEditProperty={handleEditProperty}
             onEditField={handleEditField}
+            onDeleteField={handleDeleteField}
           />
         ))}
       </div>

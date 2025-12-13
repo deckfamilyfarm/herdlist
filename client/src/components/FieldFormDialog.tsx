@@ -31,6 +31,7 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
     name: "",
     propertyId: "",
     capacity: "",
+    acres: "",
   });
 
   const { data: properties = [] } = useQuery<Property[]>({
@@ -43,12 +44,14 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
         name: field.name || "",
         propertyId: field.propertyId || "",
         capacity: field.capacity?.toString() || "",
+        acres: (field as any).acres?.toString() || "",
       });
     } else {
       setFormData({
         name: "",
         propertyId: propertyId || "",
         capacity: "",
+        acres: "",
       });
     }
   }, [field, propertyId, open]);
@@ -73,6 +76,7 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
           name: "",
           propertyId: propertyId || "",
           capacity: "",
+          acres: "",
         });
       }
     },
@@ -91,6 +95,7 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
       name: formData.name,
       propertyId: formData.propertyId,
       capacity: formData.capacity ? parseInt(formData.capacity) : null,
+      acres: formData.acres ? parseInt(formData.acres) : null,
     };
     createFieldMutation.mutate(submitData);
     onSubmit?.(submitData);
@@ -143,6 +148,17 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
               value={formData.capacity}
               onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
               data-testid="input-capacity"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="acres">Acres (Optional)</Label>
+            <Input
+              id="acres"
+              type="number"
+              min="0"
+              value={formData.acres}
+              onChange={(e) => setFormData({ ...formData, acres: e.target.value })}
+              data-testid="input-acres"
             />
           </div>
 

@@ -317,6 +317,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteField(id: string): Promise<void> {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(animals)
+      .where(eq(animals.currentFieldId, id));
+
+    if (count > 0) {
+      throw new Error("You must remove animals from this field before deleting it.");
+    }
+
     await db.delete(fields).where(eq(fields.id, id));
   }
 

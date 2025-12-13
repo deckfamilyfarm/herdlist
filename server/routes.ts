@@ -581,7 +581,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteField(req.params.id);
       res.status(204).send();
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      const message = error?.message || "Failed to delete field";
+      res.status(400).json({ message });
     }
   });
 

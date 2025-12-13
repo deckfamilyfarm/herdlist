@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS `fields` (
   `name` VARCHAR(255) NOT NULL,
   `property_id` VARCHAR(36) NOT NULL,
   `capacity` INT,
+  `acres` INT,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`property_id`) REFERENCES `properties`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

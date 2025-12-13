@@ -16,6 +16,7 @@ interface Field {
   name: string;
   capacity?: number;
   currentCount: number;
+  acres?: number | null;
 }
 
 interface Property {
@@ -33,13 +34,15 @@ interface PropertyWithFieldsProps {
   onAddField?: (propertyId: string) => void;
   onEditProperty?: (propertyId: string) => void;
   onEditField?: (fieldId: string) => void;
+  onDeleteField?: (fieldId: string) => void;
 }
 
 export function PropertyWithFields({ 
   property, 
   onAddField, 
   onEditProperty,
-  onEditField 
+  onEditField,
+  onDeleteField,
 }: PropertyWithFieldsProps) {
   const totalAnimals = property.fields.reduce((sum, field) => sum + field.currentCount, 0);
   const totalCapacity = property.fields.reduce((sum, field) => sum + (field.capacity || 0), 0);
@@ -123,6 +126,7 @@ export function PropertyWithFields({
                   <TableHead>Field Name</TableHead>
                   <TableHead>Animals</TableHead>
                   <TableHead>Capacity</TableHead>
+                  <TableHead>Acres</TableHead>
                   <TableHead>Utilization</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -141,6 +145,9 @@ export function PropertyWithFields({
                       </TableCell>
                       <TableCell className="font-mono">
                         {field.capacity || '-'}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {field.acres ?? '-'}
                       </TableCell>
                       <TableCell>
                         {utilization !== null ? (
@@ -169,6 +176,14 @@ export function PropertyWithFields({
                           data-testid={`button-edit-field-${field.id}`}
                         >
                           Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onDeleteField?.(field.id)}
+                          data-testid={`button-delete-field-${field.id}`}
+                        >
+                          Delete
                         </Button>
                       </TableCell>
                     </TableRow>

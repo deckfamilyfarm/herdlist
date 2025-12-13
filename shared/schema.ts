@@ -121,6 +121,7 @@ export const fields = mysqlTable("fields", {
   name: varchar("name", { length: 255 }).notNull(),
   propertyId: varchar("property_id", { length: 36 }).notNull(),
   capacity: int("capacity"),
+  acres: int("acres"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -265,6 +266,7 @@ export const insertPropertySchema = createInsertSchema(properties, {
 export const insertFieldSchema = createInsertSchema(fields, {
   // Coerce string from input into number
   capacity: z.coerce.number().int().optional().nullable(),
+  acres: z.coerce.number().int().optional().nullable(),
 }).omit({
   id: true,
   createdAt: true,
