@@ -14,6 +14,7 @@ import {
   slaughterRecords,
   users,
   notes,
+  breedingRecords,
   type Animal,
   type InsertAnimal,
   type Property,
@@ -33,6 +34,8 @@ import {
   type User,
   type Note,
   type InsertNote,
+  type BreedingRecord,
+  type InsertBreedingRecord,
 } from "@shared/schema";
 
 console.log("DB check:", typeof (db as any).insert, typeof (db as any).select);
@@ -91,6 +94,12 @@ export interface IStorage {
   getCalvingRecordsByDamId(damId: string): Promise<CalvingRecord[]>;
   updateCalvingRecord(id: string, record: Partial<InsertCalvingRecord>): Promise<CalvingRecord | undefined>;
   deleteCalvingRecord(id: string): Promise<void>;
+
+  // Breeding Records
+  createBreedingRecord(record: InsertBreedingRecord): Promise<BreedingRecord>;
+  getBreedingRecordsByAnimalId(animalId: string): Promise<BreedingRecord[]>;
+  updateBreedingRecord(id: string, record: Partial<InsertBreedingRecord>): Promise<BreedingRecord | undefined>;
+  deleteBreedingRecord(id: string): Promise<void>;
 
   // Slaughter Records
   createSlaughterRecord(record: InsertSlaughterRecord): Promise<SlaughterRecord>;
@@ -578,6 +587,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNote(id: string): Promise<void> {
     await db.delete(notes).where(eq(notes.id, id));
+  }
+
+  // ---------- Breeding Records ----------
+
+  async createBreedingRecord(record: InsertBreedingRecord): Promise<BreedingRecord> {
+    const id = crypto.randomUUID();
+    await db.insert(breedingRecords).values({ ...(record as any), id });
+    const [created] = await db.select().from(breedingRecords).where(eq(breedingRecords.id, id));
+    return created as BreedingRecord;
+  }
+
+  async getBreedingRecordsByAnimalId(animalId: string): Promise<BreedingRecord[]> {
+    return await db
+      .select()
+      .from(breedingRecords)
+      .where(eq(breedingRecords.animalId, animalId))
+      .orderBy(desc(breedingRecords.breedingDate), desc(breedingRecords.exposureStartDate), desc(breedingRecords.createdAt));
+  }
+
+  async updateBreedingRecord(id: string, record: Partial<InsertBreedingRecord>): Promise<BreedingRecord | undefined> {
+    await db.update(breedingRecords).set(record).where(eq(breedingRecords.id, id));
+    const [updated] = await db.select().from(breedingRecords).where(eq(breedingRecords.id, id));
+    return updated as BreedingRecord | undefined;
+  }
+
+  async deleteBreedingRecord(id: string): Promise<void> {
+    await db.delete(breedingRecords).where(eq(breedingRecords.id, id));
   }
 
   // ---------- Bulk Import ----------

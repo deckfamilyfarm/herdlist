@@ -89,6 +89,21 @@ CREATE TABLE IF NOT EXISTS `notes` (
   FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Breeding Records Table
+CREATE TABLE IF NOT EXISTS `breeding_records` (
+  `id` VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci PRIMARY KEY,
+  `animal_id` VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `method` ENUM('observed_live_cover','extended_exposure','ai') NOT NULL,
+  `breeding_date` DATE,
+  `exposure_start_date` DATE,
+  `exposure_end_date` DATE,
+  `sire_id` VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `notes` VARCHAR(2000),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`sire_id`) REFERENCES `animals`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Calving Records Table
 CREATE TABLE IF NOT EXISTS `calving_records` (
   `id` VARCHAR(36) PRIMARY KEY,

@@ -13,6 +13,7 @@ import {
   insertCalvingRecordSchema,
   insertSlaughterRecordSchema,
   insertNoteSchema,
+  insertBreedingRecordSchema,
   csvAnimalSchema,
   csvPropertySchema,
   csvFieldSchema,
@@ -35,6 +36,8 @@ import {
   type InsertSlaughterRecord,
   type InsertNote,
   type Note,
+  type BreedingRecord,
+  type InsertBreedingRecord,
 } from "@shared/schema";
 import { z } from "zod";
 import Papa from "papaparse";
@@ -315,6 +318,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/notes/:id", isAdmin, async (req, res) => {
     try {
       await storage.deleteNote(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Breeding records
+  app.get("/api/breeding/animal/:id", isAdmin, async (req, res) => {
+    try {
+      const records = await storage.getBreedingRecordsByAnimalId(req.params.id);
+      res.json(records);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/breeding", isAdmin, async (req, res) => {
+    try {
+      const validated = insertBreedingRecordSchema.parse(req.body);
+      const record = await storage.createBreedingRecord(validated);
+      res.status(201).json(record);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.put("/api/breeding/:id", isAdmin, async (req, res) => {
+    try {
+      const validated = insertBreedingRecordSchema.partial().parse(req.body);
+      const record = await storage.updateBreedingRecord(req.params.id, validated);
+      if (!record) {
+        res.status(404).json({ message: "Breeding record not found" });
+        return;
+      }
+      res.json(record);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.delete("/api/breeding/:id", isAdmin, async (req, res) => {
+    try {
+      await storage.deleteBreedingRecord(req.params.id);
       res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ message: error.message });

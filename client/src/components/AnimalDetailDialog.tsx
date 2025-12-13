@@ -21,7 +21,7 @@ import { Calendar, Syringe, Baby, Activity, Edit } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { VaccinationFormDialog } from "./VaccinationFormDialog";
-import type { Vaccination, Event, CalvingRecord, Animal, AnimalStatus, Note } from "@shared/schema";
+import type { Vaccination, Event, CalvingRecord, Animal, AnimalStatus, Note, BreedingRecord } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -59,6 +59,22 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     note: "",
   }));
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [breedingForm, setBreedingForm] = useState<{
+    method: BreedingRecord["method"];
+    breedingDate: string;
+    exposureStartDate: string;
+    exposureEndDate: string;
+    sireId: string;
+    notes: string;
+  }>(() => ({
+    method: "observed_live_cover",
+    breedingDate: new Date().toISOString().split("T")[0],
+    exposureStartDate: "",
+    exposureEndDate: "",
+    sireId: "",
+    notes: "",
+  }));
+  const [editingBreedingId, setEditingBreedingId] = useState<string | null>(null);
   const enrichedAnimal = animal as Animal & { 
     currentFieldName?: string | null; 
     sireTagNumber?: string | null; 
@@ -91,6 +107,16 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     enabled: open,
   });
 
+  // Pull all animals (for sire lookup in breeding list)
+  const { data: allAnimals = [] } = useQuery<Animal[]>({
+    queryKey: ['/api/animals'],
+  });
+
+  const { data: breeding = [], isLoading: breedingLoading } = useQuery<BreedingRecord[]>({
+    queryKey: ['/api/breeding/animal', animal.id],
+    enabled: open,
+  });
+
   const addNoteMutation = useMutation({
     mutationFn: async (data: { id?: string; noteDate: string; note: string }) => {
       if (data.id) {
@@ -120,6 +146,38 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/notes/animal', animal.id] });
+    },
+  });
+
+  const breedingMutation = useMutation({
+    mutationFn: async (payload: Partial<BreedingRecord> & { animalId: string }) => {
+      if (payload.id) {
+        const res = await apiRequest("PUT", `/api/breeding/${payload.id}`, payload);
+        return res.json();
+      }
+      const res = await apiRequest("POST", "/api/breeding", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/breeding/animal', animal.id] });
+      setBreedingForm({
+        method: "observed_live_cover",
+        breedingDate: new Date().toISOString().split("T")[0],
+        exposureStartDate: "",
+        exposureEndDate: "",
+        sireId: "",
+        notes: "",
+      });
+      setEditingBreedingId(null);
+    },
+  });
+
+  const deleteBreedingMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/breeding/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/breeding/animal', animal.id] });
     },
   });
 
@@ -168,8 +226,9 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
         </DialogHeader>
 
         <Tabs defaultValue="overview" className="mt-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="breeding" data-testid="tab-breeding">Breeding</TabsTrigger>
             <TabsTrigger value="notes" data-testid="tab-notes">Notes</TabsTrigger>
             <TabsTrigger value="vaccinations" data-testid="tab-vaccinations">Vaccinations</TabsTrigger>
             <TabsTrigger value="offspring" data-testid="tab-offspring">Offspring</TabsTrigger>
@@ -245,6 +304,235 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
             </div>
           </TabsContent>
 
+          <TabsContent value="breeding" className="mt-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Breeding
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">Method</label>
+                    <select
+                      className="w-full border rounded-md px-3 py-2 text-sm"
+                      value={breedingForm.method}
+                      onChange={(e) =>
+                        setBreedingForm((prev) => ({
+                          ...prev,
+                          method: e.target.value as BreedingRecord["method"],
+                        }))
+                      }
+                      data-testid="select-breeding-method"
+                    >
+                      <option value="observed_live_cover">Observed live cover</option>
+                      <option value="extended_exposure">Extended exposure</option>
+                      <option value="ai">AI</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">
+                      {breedingForm.method === "extended_exposure" ? "Exposure start" : "Breeding date"}
+                    </label>
+                    <Input
+                      type="date"
+                      value={
+                        breedingForm.method === "extended_exposure"
+                          ? breedingForm.exposureStartDate
+                          : breedingForm.breedingDate
+                      }
+                      onChange={(e) =>
+                        setBreedingForm((prev) =>
+                          breedingForm.method === "extended_exposure"
+                            ? { ...prev, exposureStartDate: e.target.value }
+                            : { ...prev, breedingDate: e.target.value },
+                        )
+                      }
+                      data-testid="input-breeding-date"
+                    />
+                  </div>
+
+                  {breedingForm.method === "extended_exposure" && (
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">Exposure end</label>
+                      <Input
+                        type="date"
+                        value={breedingForm.exposureEndDate}
+                        onChange={(e) =>
+                          setBreedingForm((prev) => ({ ...prev, exposureEndDate: e.target.value }))
+                        }
+                        data-testid="input-exposure-end"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">Sire (optional)</label>
+                    {breedingForm.method === "ai" && (
+                      <p className="text-xs text-muted-foreground">
+                        Semen should be added as a bull with location set to Cold Storage.
+                      </p>
+                    )}
+                    <select
+                      className="w-full border rounded-md px-3 py-2 text-sm"
+                      value={breedingForm.sireId || ""}
+                      onChange={(e) => setBreedingForm((prev) => ({ ...prev, sireId: e.target.value }))}
+                      data-testid="select-breeding-sire"
+                    >
+                      <option value="">None</option>
+                      {allAnimals
+                        .filter((a) => a.sex === "male")
+                        .slice()
+                        .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.tagNumber} {a.phenotype ? `(${a.phenotype})` : ""}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">Notes</label>
+                  <Textarea
+                    rows={3}
+                    placeholder="Add breeding notes..."
+                    value={breedingForm.notes}
+                    onChange={(e) => setBreedingForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    data-testid="textarea-breeding-notes"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  {editingBreedingId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingBreedingId(null);
+                        setBreedingForm({
+                          method: "observed_live_cover",
+                          breedingDate: new Date().toISOString().split("T")[0],
+                          exposureStartDate: "",
+                          exposureEndDate: "",
+                          sireId: "",
+                          notes: "",
+                        });
+                      }}
+                      data-testid="button-cancel-breeding"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      breedingMutation.mutate({
+                        id: editingBreedingId ?? undefined,
+                        animalId: animal.id,
+                        method: breedingForm.method,
+                        breedingDate: breedingForm.method === "extended_exposure" ? null : breedingForm.breedingDate,
+                        exposureStartDate:
+                          breedingForm.method === "extended_exposure" ? breedingForm.exposureStartDate : null,
+                        exposureEndDate:
+                          breedingForm.method === "extended_exposure" ? breedingForm.exposureEndDate : null,
+                        notes: breedingForm.notes || null,
+                        sireId: breedingForm.sireId || null,
+                      })
+                    }
+                    data-testid="button-save-breeding"
+                  >
+                    {editingBreedingId ? "Update Breeding" : "Add Breeding"}
+                  </Button>
+                </div>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Date(s)</TableHead>
+                      <TableHead>Sire</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {breedingLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          Loading...
+                        </TableCell>
+                      </TableRow>
+                    ) : breeding.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          No breeding records
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      breeding.map((record) => {
+                        const methodLabel =
+                          record.method === "observed_live_cover"
+                            ? "Observed live cover"
+                            : record.method === "extended_exposure"
+                            ? "Extended exposure"
+                            : "AI";
+                        const sire = allAnimals.find((a) => a.id === record.sireId);
+                        const dateDisplay =
+                          record.method === "extended_exposure"
+                            ? `${record.exposureStartDate?.split("T")[0] ?? "-"} — ${record.exposureEndDate?.split("T")[0] ?? "-"}`
+                            : (record.breedingDate ? record.breedingDate.split("T")[0] : "-");
+                        return (
+                          <TableRow key={record.id}>
+                            <TableCell>{methodLabel}</TableCell>
+                            <TableCell className="font-mono">{dateDisplay}</TableCell>
+                            <TableCell className="font-mono">
+                              {sire ? sire.tagNumber : record.sireId ? record.sireId : "—"}
+                            </TableCell>
+                            <TableCell className="whitespace-pre-wrap">{record.notes || "—"}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingBreedingId(record.id);
+                                    setBreedingForm({
+                                      method: record.method,
+                                      breedingDate: record.breedingDate ?? "",
+                                      exposureStartDate: record.exposureStartDate ?? "",
+                                      exposureEndDate: record.exposureEndDate ?? "",
+                                      sireId: record.sireId ?? "",
+                                      notes: record.notes ?? "",
+                                    });
+                                  }}
+                                  data-testid={`button-edit-breeding-${record.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteBreedingMutation.mutate(record.id)}
+                                  data-testid={`button-delete-breeding-${record.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
           <TabsContent value="notes" className="mt-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">

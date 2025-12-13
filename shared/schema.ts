@@ -160,6 +160,26 @@ export const events = mysqlTable("events", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const breedingMethodEnum = mysqlEnum("method", [
+  "observed_live_cover",
+  "extended_exposure",
+  "ai",
+]);
+
+export const breedingRecords = mysqlTable("breeding_records", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  animalId: varchar("animal_id", { length: 36 }).notNull(),
+  method: breedingMethodEnum.notNull(),
+  breedingDate: date("breeding_date"),
+  exposureStartDate: date("exposure_start_date"),
+  exposureEndDate: date("exposure_end_date"),
+  sireId: varchar("sire_id", { length: 36 }),
+  notes: varchar("notes", { length: 2000 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const calvingRecords = mysqlTable("calving_records", {
   id: varchar("id", { length: 36 })
     .primaryKey()
@@ -305,6 +325,28 @@ export const insertNoteSchema = createInsertSchema(notes, {
 }).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertBreedingRecordSchema = createInsertSchema(breedingRecords, {
+  breedingDate: dateOnlyOptional,
+  exposureStartDate: dateOnlyOptional,
+  exposureEndDate: dateOnlyOptional,
+}).omit({
+  id: true,
+  createdAt: true,
+}).superRefine((data, ctx) => {
+  if (data.method === "extended_exposure") {
+    if (!data.exposureStartDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Start date required", path: ["exposureStartDate"] });
+    }
+    if (!data.exposureEndDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "End date required", path: ["exposureEndDate"] });
+    }
+  } else {
+    if (!data.breedingDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Breeding date required", path: ["breedingDate"] });
+    }
+  }
 });
 
 /* =========================
