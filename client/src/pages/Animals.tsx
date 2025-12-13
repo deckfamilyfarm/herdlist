@@ -38,7 +38,7 @@ export default function Animals() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef">("all");
-  const [sexFilter, setSexFilter] = useState<"all" | "male" | "female">("all");
+  const [sexFilter, setSexFilter] = useState<"all" | "cow" | "bull" | "steer" | "stag" | "freemartin">("all");
   const [a2a2Filter, setA2a2Filter] = useState<BooleanFilter>("all");
   const [polledFilter, setPolledFilter] = useState<BooleanFilter>("all");
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
@@ -133,7 +133,12 @@ export default function Animals() {
     const matchesType = typeFilter === "all" || animal.type === typeFilter;
 
     // Sex filter
-    const matchesSex = sexFilter === "all" || animal.sex === sexFilter;
+    const normalizedSex = (() => {
+      if (animal.sex === "male") return "bull";
+      if (animal.sex === "female") return "cow";
+      return animal.sex;
+    })();
+    const matchesSex = sexFilter === "all" || normalizedSex === sexFilter;
 
     // A2A2 / Polled filters
     const matchesA2a2 =
@@ -259,15 +264,18 @@ export default function Animals() {
         {/* Sex filter */}
         <Select
           value={sexFilter}
-          onValueChange={(val: "all" | "male" | "female") => setSexFilter(val)}
+          onValueChange={(val) => setSexFilter(val as typeof sexFilter)}
         >
           <SelectTrigger className="w-full sm:w-36" data-testid="select-filter-sex">
             <SelectValue placeholder="Sex" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Sexes</SelectItem>
-            <SelectItem value="female">Female</SelectItem>
-            <SelectItem value="male">Male</SelectItem>
+            <SelectItem value="cow">Cow</SelectItem>
+            <SelectItem value="bull">Bull</SelectItem>
+            <SelectItem value="steer">Steer</SelectItem>
+            <SelectItem value="stag">Stag</SelectItem>
+            <SelectItem value="freemartin">Freemartin</SelectItem>
           </SelectContent>
         </Select>
 

@@ -84,11 +84,17 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
 
   useEffect(() => {
     if (animal) {
+      const normalizedSex =
+        animal.sex === "male"
+          ? "bull"
+          : animal.sex === "female"
+          ? "cow"
+          : (animal.sex as string) || "";
       setFormData({
         tagNumber: animal.tagNumber,
         type: animal.type,
-        sex: animal.sex,
-        dateOfBirth: (animal.dateOfBirth as any as string) || "",
+        sex: normalizedSex,
+        dateOfBirth: animal.dateOfBirth ? new Date(animal.dateOfBirth as any).toISOString().split("T")[0] : "",
         sireId: animal.sireId || "",
         damId: animal.damId || "",
         currentFieldId: animal.currentFieldId || "",
@@ -134,9 +140,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       onOpenChange(false);
       setFormData({
         tagNumber: "",
-      type: "",
-      sex: "",
-      dateOfBirth: "",
+        type: "",
+        sex: "",
+        dateOfBirth: "",
         sireId: "",
         damId: "",
         currentFieldId: "",
@@ -253,8 +259,11 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                 <SelectValue placeholder="Select sex" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="male">Male</SelectItem>
-                <SelectItem value="female">Female</SelectItem>
+                <SelectItem value="cow">Cow</SelectItem>
+                <SelectItem value="bull">Bull</SelectItem>
+                <SelectItem value="steer">Steer</SelectItem>
+                <SelectItem value="stag">Stag</SelectItem>
+                <SelectItem value="freemartin">Freemartin</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -303,7 +312,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                         None
                       </CommandItem>
                       {animals
-                        .filter((a) => a.sex === "male")
+                        .filter((a) => a.sex === "bull" || a.sex === "male")
                         .slice()
                         .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
                         .map((a) => (
@@ -360,7 +369,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                         None
                       </CommandItem>
                       {animals
-                        .filter((a) => a.sex === "female")
+                        .filter((a) => a.sex === "cow" || a.sex === "female")
                         .slice()
                         .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
                         .map((a) => (

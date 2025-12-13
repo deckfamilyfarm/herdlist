@@ -390,7 +390,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
                         {allAnimals
-                          .filter((a) => a.sex === "male")
+                          .filter((a) => a.sex === "bull" || a.sex === "male")
                           .slice()
                           .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
                           .map((a) => (

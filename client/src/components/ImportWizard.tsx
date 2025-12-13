@@ -26,7 +26,6 @@ const CSV_TEMPLATES: Record<string, string[]> = {
     "type",
     "sex",
     "dateOfBirth",
-    "breedingMethod",
     "sireTag",
     "damTag",
     "herdName",
@@ -46,9 +45,8 @@ const CSV_TEMPLATES: Record<string, string[]> = {
 const FORMAT_NOTES: Record<string, string[]> = {
   animals: [
     "type: dairy or beef",
-    "sex: male or female",
+    "sex: cow, bull, steer, stag, freemartin (legacy male->bull, female->cow)",
     "dateOfBirth: YYYY-MM-DD",
-    "breedingMethod: live-cover or ai",
     "herdName: wet, nurse, finish, main, grafting, or yearlings",
     "organic: true or false",
     "a2a2: true or false",
