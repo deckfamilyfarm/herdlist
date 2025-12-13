@@ -30,46 +30,88 @@ export function AnimalTable({ animals, onView, onEdit, onDelete }: AnimalTablePr
     return str.includes("T") ? str.split("T")[0] : str;
   };
 
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  type SortKey = "tagNumber" | "phenotype" | "type" | "sex" | "dateOfBirth" | "currentLocation" | "a2a2" | "polled";
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "dateOfBirth",
+    dir: "desc",
+  });
+
+  const toggleSort = (key: SortKey) => {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
+    );
+  };
+
+  const renderSortButton = (label: string, key: SortKey) => (
+    <button
+      className="flex items-center gap-1 font-medium text-sm"
+      type="button"
+      onClick={() => toggleSort(key)}
+    >
+      {label}
+      <span className="text-xs text-muted-foreground">
+        {sort.key === key ? (sort.dir === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </button>
+  );
 
   const sortedAnimals = useMemo(() => {
     return [...animals].sort((a, b) => {
-      const dateA = a.dateOfBirth ? new Date(a.dateOfBirth as any).getTime() : 0;
-      const dateB = b.dateOfBirth ? new Date(b.dateOfBirth as any).getTime() : 0;
-      return sortDir === "asc" ? dateA - dateB : dateB - dateA;
+      const dir = sort.dir === "asc" ? 1 : -1;
+      const getVal = (animal: Animal & { currentLocation?: string }) => {
+        switch (sort.key) {
+          case "tagNumber":
+            return animal.tagNumber.toLowerCase();
+          case "phenotype":
+            return (animal.phenotype || "").toLowerCase();
+          case "type":
+            return animal.type.toLowerCase();
+          case "sex":
+            return (animal.sex || "").toLowerCase();
+          case "currentLocation":
+            return (animal.currentLocation || "").toLowerCase();
+          case "a2a2":
+            return animal.a2a2 ? 1 : 0;
+          case "polled":
+            return animal.polled ? 1 : 0;
+          case "dateOfBirth":
+          default:
+            return animal.dateOfBirth ? new Date(animal.dateOfBirth as any).getTime() : 0;
+        }
+      };
+
+      const va = getVal(a);
+      const vb = getVal(b);
+
+      if (typeof va === "number" && typeof vb === "number") {
+        return (va - vb) * dir;
+      }
+      return va < vb ? -1 * dir : va > vb ? 1 * dir : 0;
     });
-  }, [animals, sortDir]);
+  }, [animals, sort]);
 
   return (
     <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Tag Number</TableHead>
-            <TableHead>Phenotype</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Sex</TableHead>
-            <TableHead>
-              <button
-                className="flex items-center gap-1 font-medium text-sm"
-                onClick={() => setSortDir((prev) => (prev === "asc" ? "desc" : "asc"))}
-                type="button"
-                data-testid="button-sort-dob"
-              >
-                Date of Birth
-                <span className="text-xs text-muted-foreground">{sortDir === "asc" ? "↑" : "↓"}</span>
-              </button>
+            <TableHead>{renderSortButton("Tag Number", "tagNumber")}</TableHead>
+            <TableHead>{renderSortButton("Phenotype", "phenotype")}</TableHead>
+            <TableHead>{renderSortButton("Type", "type")}</TableHead>
+            <TableHead>{renderSortButton("Sex", "sex")}</TableHead>
+            <TableHead data-testid="button-sort-dob">
+              {renderSortButton("Date of Birth", "dateOfBirth")}
             </TableHead>
-            <TableHead>Location</TableHead>
-            <TableHead>A2A2</TableHead>
-            <TableHead>Polled</TableHead>
+            <TableHead>{renderSortButton("Location", "currentLocation")}</TableHead>
+            <TableHead>{renderSortButton("A2A2", "a2a2")}</TableHead>
+            <TableHead>{renderSortButton("Polled", "polled")}</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedAnimals.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={10} className="text-center text-muted-foreground">
+              <TableCell colSpan={9} className="text-center text-muted-foreground">
                 No animals found
               </TableCell>
             </TableRow>

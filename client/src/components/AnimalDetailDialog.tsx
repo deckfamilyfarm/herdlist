@@ -10,6 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -310,21 +317,24 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                 <div className="grid md:grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <label className="text-sm text-muted-foreground">Method</label>
-                    <select
-                      className="w-full border rounded-md px-3 py-2 text-sm"
+                    <Select
                       value={breedingForm.method}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         setBreedingForm((prev) => ({
                           ...prev,
-                          method: e.target.value as BreedingRecord["method"],
+                          method: value as BreedingRecord["method"],
                         }))
                       }
-                      data-testid="select-breeding-method"
                     >
-                      <option value="observed_live_cover">Observed live cover</option>
-                      <option value="extended_exposure">Extended exposure</option>
-                      <option value="ai">AI</option>
-                    </select>
+                      <SelectTrigger className="w-full" data-testid="select-breeding-method">
+                        <SelectValue placeholder="Select method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="observed_live_cover">Observed live cover</SelectItem>
+                        <SelectItem value="extended_exposure">Extended exposure</SelectItem>
+                        <SelectItem value="ai">AI</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
@@ -370,23 +380,26 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                         Semen should be added as a bull with location set to Cold Storage.
                       </p>
                     )}
-                    <select
-                      className="w-full border rounded-md px-3 py-2 text-sm"
+                    <Select
                       value={breedingForm.sireId || ""}
-                      onChange={(e) => setBreedingForm((prev) => ({ ...prev, sireId: e.target.value }))}
-                      data-testid="select-breeding-sire"
+                      onValueChange={(value) => setBreedingForm((prev) => ({ ...prev, sireId: value }))}
                     >
-                      <option value="">None</option>
-                      {allAnimals
-                        .filter((a) => a.sex === "male")
-                        .slice()
-                        .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.tagNumber} {a.phenotype ? `(${a.phenotype})` : ""}
-                          </option>
-                        ))}
-                    </select>
+                      <SelectTrigger className="w-full" data-testid="select-breeding-sire">
+                        <SelectValue placeholder="Select sire (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {allAnimals
+                          .filter((a) => a.sex === "male")
+                          .slice()
+                          .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
+                          .map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.tagNumber} {a.phenotype ? `(${a.phenotype})` : ""}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
