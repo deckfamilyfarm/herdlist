@@ -324,9 +324,9 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                         </TableCell>
                       </TableRow>
                     ) : (
-                      notes.map((note) => (
+                      [...notes].map((note) => (
                         <TableRow key={note.id}>
-                          <TableCell className="font-mono font-medium">{note.noteDate}</TableCell>
+                          <TableCell className="font-mono font-medium">{formatNoteDate(note.noteDate)}</TableCell>
                           <TableCell className="whitespace-pre-wrap">
                             <div className="flex items-start justify-between gap-2">
                               <span>{note.note}</span>
@@ -515,3 +515,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     </Dialog>
   );
 }
+  const formatNoteDate = (value: string) => {
+    if (!value) return "-";
+    return value.includes("T") ? value.split("T")[0] : value;
+  };

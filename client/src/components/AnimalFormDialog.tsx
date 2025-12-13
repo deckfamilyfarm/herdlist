@@ -11,6 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -58,6 +71,8 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     herdName: "",
     status: "active",
   });
+  const [sireOpen, setSireOpen] = useState(false);
+  const [damOpen, setDamOpen] = useState(false);
 
   // Fetch animals for sire/dam selection
   const { data: animals = [] } = useQuery<Animal[]>({
@@ -275,49 +290,117 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
           </div>
           <div className="space-y-2">
             <Label htmlFor="sireId">Sire (Father)</Label>
-            <Select
-              value={formData.sireId || "none"}
-              onValueChange={(value) =>
-                setFormData({ ...formData, sireId: value === "none" ? "" : value })
-              }
-            >
-              <SelectTrigger id="sireId" data-testid="select-sire">
-                <SelectValue placeholder="Select sire (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {animals
-                  .filter((a) => a.sex === "male")
-                  .map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.tagNumber} {a.phenotype ? `(${a.phenotype})` : ""}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <Popover open={sireOpen} onOpenChange={setSireOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between"
+                  data-testid="select-sire"
+                >
+                  {formData.sireId
+                    ? (() => {
+                        const match = animals.find((a) => a.id === formData.sireId);
+                        return match
+                          ? `${match.tagNumber}${match.phenotype ? ` (${match.phenotype})` : ""}`
+                          : "Select sire";
+                      })()
+                    : "Select sire"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[280px] p-0">
+                <Command>
+                  <CommandInput placeholder="Search sire by tag or phenotype..." />
+                  <CommandList className="max-h-64 overflow-y-auto">
+                    <CommandEmpty>No sire found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        onSelect={() => {
+                          setFormData({ ...formData, sireId: "" });
+                          setSireOpen(false);
+                        }}
+                      >
+                        None
+                      </CommandItem>
+                      {animals
+                        .filter((a) => a.sex === "male")
+                        .slice()
+                        .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
+                        .map((a) => (
+                          <CommandItem
+                            key={a.id}
+                            value={`${a.tagNumber} ${a.phenotype ?? ""}`}
+                            onSelect={() => {
+                              setFormData({ ...formData, sireId: a.id });
+                              setSireOpen(false);
+                            }}
+                          >
+                            <span className="font-mono">{a.tagNumber}</span>
+                            {a.phenotype ? <span className="ml-2 text-muted-foreground">{a.phenotype}</span> : null}
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="space-y-2">
             <Label htmlFor="damId">Dam (Mother)</Label>
-            <Select
-              value={formData.damId || "none"}
-              onValueChange={(value) =>
-                setFormData({ ...formData, damId: value === "none" ? "" : value })
-              }
-            >
-              <SelectTrigger id="damId" data-testid="select-dam">
-                <SelectValue placeholder="Select dam (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {animals
-                  .filter((a) => a.sex === "female")
-                  .map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.tagNumber} {a.phenotype ? `(${a.phenotype})` : ""}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <Popover open={damOpen} onOpenChange={setDamOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between"
+                  data-testid="select-dam"
+                >
+                  {formData.damId
+                    ? (() => {
+                        const match = animals.find((a) => a.id === formData.damId);
+                        return match
+                          ? `${match.tagNumber}${match.phenotype ? ` (${match.phenotype})` : ""}`
+                          : "Select dam";
+                      })()
+                    : "Select dam"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[280px] p-0">
+                <Command>
+                  <CommandInput placeholder="Search dam by tag or phenotype..." />
+                  <CommandList className="max-h-64 overflow-y-auto">
+                    <CommandEmpty>No dam found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        onSelect={() => {
+                          setFormData({ ...formData, damId: "" });
+                          setDamOpen(false);
+                        }}
+                      >
+                        None
+                      </CommandItem>
+                      {animals
+                        .filter((a) => a.sex === "female")
+                        .slice()
+                        .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber))
+                        .map((a) => (
+                          <CommandItem
+                            key={a.id}
+                            value={`${a.tagNumber} ${a.phenotype ?? ""}`}
+                            onSelect={() => {
+                              setFormData({ ...formData, damId: a.id });
+                              setDamOpen(false);
+                            }}
+                          >
+                            <span className="font-mono">{a.tagNumber}</span>
+                            {a.phenotype ? <span className="ml-2 text-muted-foreground">{a.phenotype}</span> : null}
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="space-y-2">
             <Label htmlFor="currentFieldId">Current Location</Label>
