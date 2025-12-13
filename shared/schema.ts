@@ -59,9 +59,7 @@ const dateOnlyOptional = z
 export const animalStatusEnum = [
   "active",
   "slaughtered",
-  "sold",
-  "died",
-  "missing",
+  "expired",
 ] as const;
 
 export type AnimalStatus = (typeof animalStatusEnum)[number];

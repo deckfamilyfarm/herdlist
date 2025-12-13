@@ -430,7 +430,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                 <SelectItem value="main">Main</SelectItem>
                 <SelectItem value="grafting">Grafting</SelectItem>
                 <SelectItem value="yearling">Yearling</SelectItem>
-                <SelectItem value="missing">Missing</SelectItem>
                 <SelectItem value="bull">Bull</SelectItem>
               </SelectContent>
             </Select>

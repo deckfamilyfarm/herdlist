@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `animals` (
   `betacasein` ENUM('A2/A2','A1','Not Tested'),
   `polled` BOOLEAN DEFAULT FALSE,
   `herd_name` ENUM('wet', 'nurse', 'finish', 'main', 'grafting', 'yearling', 'missing', 'bull'),
-  `status` ENUM('active', 'slaughtered', 'sold', 'died', 'missing') NOT NULL DEFAULT 'active',
+  `status` ENUM('active', 'slaughtered', 'expired') NOT NULL DEFAULT 'active',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
