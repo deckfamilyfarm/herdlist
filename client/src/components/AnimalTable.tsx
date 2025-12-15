@@ -76,7 +76,8 @@ export function AnimalTable({
     | "sireTagNumber"
     | "damTagNumber"
     | "betacasein"
-    | "polled";
+    | "polled"
+    | "tags";
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "dateOfBirth",
     dir: "desc",
@@ -124,6 +125,8 @@ export function AnimalTable({
             return (animal as any).betacasein || "";
           case "polled":
             return polledRank[normalizePolledStatus((animal as any).polled)];
+          case "tags":
+            return Array.isArray((animal as any).tags) ? (animal as any).tags.join(",") : "";
           case "dateOfBirth":
           default:
             return animal.dateOfBirth ? new Date(animal.dateOfBirth as any).getTime() : 0;
@@ -158,13 +161,14 @@ export function AnimalTable({
             <TableHead>{renderSortButton("Dam", "damTagNumber")}</TableHead>
             <TableHead>{renderSortButton("A2", "betacasein")}</TableHead>
             <TableHead>{renderSortButton("Horn Status", "polled")}</TableHead>
+            <TableHead>Tags</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedAnimals.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12} className="text-center text-muted-foreground">
+              <TableCell colSpan={13} className="text-center text-muted-foreground">
                 No animals found
               </TableCell>
             </TableRow>
@@ -235,6 +239,11 @@ export function AnimalTable({
                 </TableCell>
                 <TableCell>{(animal as any).betacasein || "Not Tested"}</TableCell>
                 <TableCell>{formatPolledStatus((animal as any).polled)}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {Array.isArray((animal as any).tags) && (animal as any).tags.length > 0
+                    ? (animal as any).tags.join(", ")
+                    : "-"}
+                </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button

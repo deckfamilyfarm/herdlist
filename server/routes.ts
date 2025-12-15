@@ -52,6 +52,16 @@ const bulkMoveAnimalsSchema = z.object({
   note: z.string().optional(),
 });
 
+const bulkTagsSchema = z.object({
+  animalIds: z.array(z.string().min(1)).min(1),
+  tags: z.array(z.string()).min(1),
+});
+
+const bulkRemoveTagsSchema = z.object({
+  animalIds: z.array(z.string().min(1)).min(1),
+  tags: z.array(z.string()).min(1),
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   await setupAuth(app);
@@ -458,6 +468,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         movementDate: parsedDate,
         note: note?.trim() || undefined,
       });
+      res.json({ updated: animalIds.length });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.post("/api/animals/bulk-tags", isAdmin, async (req, res) => {
+    try {
+      const { animalIds, tags } = bulkTagsSchema.parse(req.body);
+      await storage.updateAnimalsTags(animalIds, tags);
+      res.json({ updated: animalIds.length });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.post("/api/animals/bulk-tags/remove", isAdmin, async (req, res) => {
+    try {
+      const { animalIds, tags } = bulkRemoveTagsSchema.parse(req.body);
+      await storage.removeAnimalsTags(animalIds, tags);
       res.json({ updated: animalIds.length });
     } catch (error: any) {
       if (error instanceof z.ZodError) {

@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   animalStatusEnum,
   polledStatusEnum,
+  animalTagOptions,
   type Animal,
   type AnimalStatus,
   type Field,
@@ -64,6 +65,8 @@ export default function Animals() {
     new Date().toISOString().split("T")[0],
   );
   const [bulkMoveNote, setBulkMoveNote] = useState<string>("");
+  const [bulkTags, setBulkTags] = useState<Set<string>>(new Set());
+  const [bulkRemoveTags, setBulkRemoveTags] = useState<Set<string>>(new Set());
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef">("all");
@@ -72,6 +75,7 @@ export default function Animals() {
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all"); // default "all"
   const [betacaseinFilter, setBetacaseinFilter] = useState<BetacaseinFilter>("all");
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
   const { data: animals = [], isLoading } = useQuery<Animal[]>({
     queryKey: ["/api/animals"],
@@ -172,6 +176,50 @@ export default function Animals() {
     },
   });
 
+  const bulkTagsMutation = useMutation({
+    mutationFn: async ({ animalIds, tags }: { animalIds: string[]; tags: string[] }) => {
+      await apiRequest("POST", "/api/animals/bulk-tags", { animalIds, tags });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/animals"] });
+      toast({
+        title: "Tags applied",
+        description: `Applied tags to ${variables.animalIds.length} animals.`,
+      });
+      setBulkTags(new Set());
+      setSelectedIds(new Set());
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Tag update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkRemoveTagsMutation = useMutation({
+    mutationFn: async ({ animalIds, tags }: { animalIds: string[]; tags: string[] }) => {
+      await apiRequest("POST", "/api/animals/bulk-tags/remove", { animalIds, tags });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/animals"] });
+      toast({
+        title: "Tags removed",
+        description: `Removed tags from ${variables.animalIds.length} animals.`,
+      });
+      setBulkRemoveTags(new Set());
+      setSelectedIds(new Set());
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Tag removal failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // ---------- Filtering logic ----------
   const searchLower = searchTerm.trim().toLowerCase();
 
@@ -219,6 +267,12 @@ export default function Animals() {
     const polledStatus = normalizePolledStatus(anyAnimal.polled);
     const matchesPolled = polledFilter === "all" || polledStatus === polledFilter;
 
+    // Tags filter: require intersection if any selected
+    const animalTags: string[] = Array.isArray((anyAnimal as any).tags) ? (anyAnimal as any).tags : [];
+    const matchesTags =
+      selectedTags.size === 0 ||
+      animalTags.some((tag) => selectedTags.has(tag));
+
     // Field filter: if any selected, require match
     const matchesField =
       selectedFieldIds.size === 0 ||
@@ -232,6 +286,7 @@ export default function Animals() {
       matchesSex &&
       matchesBetacasein &&
       matchesPolled &&
+      matchesTags &&
       matchesField
     );
   });
@@ -466,6 +521,49 @@ export default function Animals() {
           </SelectContent>
         </Select>
 
+        {/* Tags filter */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-tags">
+              {selectedTags.size === 0
+                ? "All tags"
+                : `${selectedTags.size} tag${selectedTags.size > 1 ? "s" : ""} selected`}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+            <DropdownMenuLabel>Tags</DropdownMenuLabel>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                setSelectedTags(new Set());
+              }}
+              className="flex items-center gap-2"
+            >
+              <Checkbox checked={selectedTags.size === 0} className="pointer-events-none" />
+              All tags
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {animalTagOptions.map((tag) => (
+              <DropdownMenuItem
+                key={tag}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setSelectedTags((prev) => {
+                    const next = new Set(prev);
+                    next.has(tag) ? next.delete(tag) : next.add(tag);
+                    return next;
+                  });
+                }}
+                className="flex items-center gap-2"
+                data-testid={`checkbox-filter-tag-${tag}`}
+              >
+                <Checkbox checked={selectedTags.has(tag)} className="pointer-events-none" />
+                <span className="capitalize">{tag}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {/* Status filter */}
         <Select
           value={statusFilter}
@@ -576,6 +674,113 @@ export default function Animals() {
             data-testid="button-bulk-move"
           >
             {bulkMoveMutation.isPending ? "Moving..." : "Move selected"}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-bulk-tags">
+                {bulkTags.size === 0
+                  ? "Select tags to add"
+                  : `${bulkTags.size} tag${bulkTags.size > 1 ? "s" : ""} to add`}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+              <DropdownMenuLabel>Add Tags</DropdownMenuLabel>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setBulkTags(new Set());
+                }}
+                className="flex items-center gap-2"
+              >
+                <Checkbox checked={bulkTags.size === 0} className="pointer-events-none" />
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {animalTagOptions.map((tag) => (
+                <DropdownMenuItem
+                  key={tag}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setBulkTags((prev) => {
+                      const next = new Set(prev);
+                      next.has(tag) ? next.delete(tag) : next.add(tag);
+                      return next;
+                    });
+                  }}
+                  className="flex items-center gap-2"
+                  data-testid={`checkbox-bulk-tag-${tag}`}
+                >
+                  <Checkbox checked={bulkTags.has(tag)} className="pointer-events-none" />
+                  <span className="capitalize">{tag}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            onClick={() =>
+              bulkTagsMutation.mutate({
+                animalIds: Array.from(selectedIds),
+                tags: Array.from(bulkTags),
+              })
+            }
+            disabled={selectedIds.size === 0 || bulkTags.size === 0 || bulkTagsMutation.isPending}
+            data-testid="button-bulk-apply-tags"
+          >
+            {bulkTagsMutation.isPending ? "Applying..." : "Apply tags"}
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-bulk-remove-tags">
+                {bulkRemoveTags.size === 0
+                  ? "Select tags to remove"
+                  : `${bulkRemoveTags.size} tag${bulkRemoveTags.size > 1 ? "s" : ""} to remove`}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+              <DropdownMenuLabel>Remove Tags</DropdownMenuLabel>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setBulkRemoveTags(new Set());
+                }}
+                className="flex items-center gap-2"
+              >
+                <Checkbox checked={bulkRemoveTags.size === 0} className="pointer-events-none" />
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {animalTagOptions.map((tag) => (
+                <DropdownMenuItem
+                  key={tag}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setBulkRemoveTags((prev) => {
+                      const next = new Set(prev);
+                      next.has(tag) ? next.delete(tag) : next.add(tag);
+                      return next;
+                    });
+                  }}
+                  className="flex items-center gap-2"
+                  data-testid={`checkbox-bulk-remove-tag-${tag}`}
+                >
+                  <Checkbox checked={bulkRemoveTags.has(tag)} className="pointer-events-none" />
+                  <span className="capitalize">{tag}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            onClick={() =>
+              bulkRemoveTagsMutation.mutate({
+                animalIds: Array.from(selectedIds),
+                tags: Array.from(bulkRemoveTags),
+              })
+            }
+            disabled={selectedIds.size === 0 || bulkRemoveTags.size === 0 || bulkRemoveTagsMutation.isPending}
+            data-testid="button-bulk-remove-tags"
+          >
+            {bulkRemoveTagsMutation.isPending ? "Removing..." : "Remove tags"}
           </Button>
         </div>
       </div>

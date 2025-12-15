@@ -29,7 +29,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { InsertAnimal, Animal, Field, AnimalStatus, PolledStatus } from "@shared/schema";
-import { animalStatusEnum, polledStatusEnum } from "@shared/schema";
+import { animalStatusEnum, polledStatusEnum, animalTagOptions } from "@shared/schema";
 
 interface AnimalFormDialogProps {
   open: boolean;
@@ -56,6 +56,8 @@ const polledOptions: PolledStatus[] = [
   ...polledStatusEnum.filter((status) => status !== "not tested"),
 ] as PolledStatus[];
 
+const tagOptions = animalTagOptions;
+
 export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: AnimalFormDialogProps) {
   const { toast } = useToast();
   const [formData, setFormData] = useState<{
@@ -70,6 +72,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     phenotype: string;
     betacasein: string;
     polled: PolledStatus;
+    tags: string[];
     herdName: string;
     status: AnimalStatus;
   }>({
@@ -84,6 +87,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     phenotype: "",
     betacasein: "",
     polled: "not tested",
+    tags: [],
     herdName: "",
     status: "active",
   });
@@ -120,6 +124,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         phenotype: animal.phenotype || "",
         betacasein: (animal as any).betacasein || "",
         polled: normalizePolledStatus((animal as any).polled),
+        tags: Array.isArray((animal as any).tags) ? (animal as any).tags : [],
         herdName: animal.herdName || "",
         status: (animal.status as AnimalStatus) ?? "active",
       });
@@ -136,6 +141,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         phenotype: "",
         betacasein: "",
         polled: "not tested",
+        tags: [],
         herdName: "",
         status: "active",
       });
@@ -230,6 +236,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       phenotype: formData.phenotype.trim() || null,
       betacasein: formData.betacasein || null,
       polled: formData.polled || "not tested",
+      tags: formData.tags,
     };
     
     if (animal) {
@@ -534,6 +541,32 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {animalTagOptions.map((tag) => (
+                <div key={tag} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`tag-${tag}`}
+                    checked={formData.tags.includes(tag)}
+                    onCheckedChange={(checked) => {
+                      const next = new Set(formData.tags);
+                      if (checked === true) {
+                        next.add(tag);
+                      } else {
+                        next.delete(tag);
+                      }
+                      setFormData({ ...formData, tags: Array.from(next) });
+                    }}
+                    data-testid={`checkbox-tag-${tag}`}
+                  />
+                  <Label htmlFor={`tag-${tag}`} className="text-sm font-normal cursor-pointer capitalize">
+                    {tag}
+                  </Label>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="phenotype">Phenotype</Label>

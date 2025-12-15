@@ -128,6 +128,7 @@ export const animals = mysqlTable("animals", {
   organic: boolean("organic").default(false),
   phenotype: varchar("phenotype", { length: 1000 }),
   polled: mysqlEnum("polled", polledStatusEnum).default("not tested"),
+  tags: json("tags").$type<string[] | null>().default(sql`JSON_ARRAY()`),
   betacasein: mysqlEnum("betacasein", ["A2/A2", "A1", "Not Tested"]),
   herdName: herdNameEnum,
   status: mysqlEnum("status", animalStatusEnum).notNull().default("active"),
@@ -297,6 +298,10 @@ export const insertAnimalSchema = createInsertSchema(animals, {
       }
       return normalized;
     }),
+  tags: z
+    .array(z.string())
+    .optional()
+    .transform((val) => (val && Array.isArray(val) ? val : [])),
 }).omit({
   id: true,
   createdAt: true,
@@ -583,3 +588,5 @@ export type ImportResult = {
 };
 
 export type CsvNoteRow = z.infer<typeof csvNoteSchema>;
+
+export const animalTagOptions = ["open", "wet", "bred", "grafting", "missing"] as const;

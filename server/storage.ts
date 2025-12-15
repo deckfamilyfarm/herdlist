@@ -144,6 +144,8 @@ export interface IStorage {
     fieldId: string,
     options?: { movementDate?: Date; note?: string },
   ): Promise<void>;
+  updateAnimalsTags(animalIds: string[], tags: string[]): Promise<void>;
+  removeAnimalsTags(animalIds: string[], tags: string[]): Promise<void>;
 
   // Bulk Import
   bulkCreateAnimals(animals: InsertAnimal[]): Promise<Animal[]>;
@@ -214,6 +216,7 @@ export class DatabaseStorage implements IStorage {
       phenotype: animals.phenotype,
       organic: animals.organic,
       polled: animals.polled,
+      tags: animals.tags,
       betacasein: animals.betacasein,
       currentFieldName: fields.name,
       sireTagNumber: sireAnimals.tagNumber,
@@ -226,13 +229,16 @@ export class DatabaseStorage implements IStorage {
 
   return result.map((animal) => ({
     ...(animal as any),
+    tags: (animal as any).tags ?? [],
     polled: normalizePolledStatus((animal as any).polled),
   })) as Animal[];
 }
 
   async getAnimalById(id: string): Promise<Animal | undefined> {
     const [animal] = await db.select().from(animals).where(eq(animals.id, id));
-    return animal ? ({ ...(animal as any), polled: normalizePolledStatus((animal as any).polled) } as Animal) : undefined;
+    return animal
+      ? ({ ...(animal as any), polled: normalizePolledStatus((animal as any).polled), tags: (animal as any).tags ?? [] } as Animal)
+      : undefined;
   }
 
   async updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined> {
@@ -240,11 +246,14 @@ export class DatabaseStorage implements IStorage {
     if (Object.prototype.hasOwnProperty.call(animal, "polled")) {
       updateData.polled = normalizePolledStatus((animal as any).polled);
     }
+    if (Object.prototype.hasOwnProperty.call(animal, "tags") && Array.isArray((animal as any).tags)) {
+      updateData.tags = (animal as any).tags;
+    }
 
     await db.update(animals).set(updateData).where(eq(animals.id, id));
     const [updated] = await db.select().from(animals).where(eq(animals.id, id));
     return updated
-      ? ({ ...(updated as any), polled: normalizePolledStatus((updated as any).polled) } as Animal)
+      ? ({ ...(updated as any), polled: normalizePolledStatus((updated as any).polled), tags: (updated as any).tags ?? [] } as Animal)
       : undefined;
   }
 
@@ -272,6 +281,7 @@ export class DatabaseStorage implements IStorage {
         phenotype: animals.phenotype,
         organic: animals.organic,
         polled: animals.polled,
+        tags: animals.tags,
         betacasein: animals.betacasein,
       })
       .from(animals)
@@ -287,6 +297,7 @@ export class DatabaseStorage implements IStorage {
     return result.map((animal) => ({
       ...(animal as any),
       polled: normalizePolledStatus((animal as any).polled),
+      tags: (animal as any).tags ?? [],
     })) as Animal[];
   }
 
@@ -306,6 +317,7 @@ export class DatabaseStorage implements IStorage {
         phenotype: animals.phenotype,
         organic: animals.organic,
         polled: animals.polled,
+        tags: animals.tags,
         betacasein: animals.betacasein,
         currentFieldName: fields.name,
       })
@@ -726,6 +738,40 @@ export class DatabaseStorage implements IStorage {
         await tx.insert(movements).values(movementRows);
       }
     });
+  }
+
+  async updateAnimalsTags(animalIds: string[], tags: string[]): Promise<void> {
+    if (animalIds.length === 0) return;
+    const applyTags = Array.from(new Set(tags.filter(Boolean)));
+    if (applyTags.length === 0) return;
+
+    const existing = await db
+      .select({ id: animals.id, tags: animals.tags })
+      .from(animals)
+      .where(inArray(animals.id, animalIds));
+
+    for (const row of existing) {
+      const current = Array.isArray((row as any).tags) ? ((row as any).tags as string[]) : [];
+      const merged = Array.from(new Set([...current, ...applyTags]));
+      await db.update(animals).set({ tags: merged }).where(eq(animals.id, row.id));
+    }
+  }
+
+  async removeAnimalsTags(animalIds: string[], tags: string[]): Promise<void> {
+    if (animalIds.length === 0) return;
+    const removeSet = new Set(tags.filter(Boolean));
+    if (removeSet.size === 0) return;
+
+    const existing = await db
+      .select({ id: animals.id, tags: animals.tags })
+      .from(animals)
+      .where(inArray(animals.id, animalIds));
+
+    for (const row of existing) {
+      const current = Array.isArray((row as any).tags) ? ((row as any).tags as string[]) : [];
+      const filtered = current.filter((tag) => !removeSet.has(tag));
+      await db.update(animals).set({ tags: filtered }).where(eq(animals.id, row.id));
+    }
   }
 
   async bulkCreateAnimals(animalList: InsertAnimal[]): Promise<Animal[]> {
