@@ -28,6 +28,7 @@ import {
   resetPasswordSchema,
   type ImportResult,
   type InsertAnimal,
+  fields as fieldsTable,
   type InsertProperty,
   type InsertField,
   type InsertVaccination,
@@ -41,6 +42,13 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import Papa from "papaparse";
+
+const bulkMoveAnimalsSchema = z.object({
+  animalIds: z.array(z.string().min(1)).min(1),
+  fieldId: z.string().min(1),
+  movementDate: z.string().optional(),
+  note: z.string().optional(),
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
@@ -421,6 +429,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       res.json(animal);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.post("/api/animals/bulk-move", isAdmin, async (req, res) => {
+    try {
+      const { animalIds, fieldId, movementDate, note } = bulkMoveAnimalsSchema.parse(req.body);
+      const field = await storage.getFieldById(fieldId);
+      if (!field) {
+        res.status(400).json({ message: "Invalid field ID" });
+        return;
+      }
+      const parsedDate = movementDate ? new Date(movementDate) : new Date();
+      if (isNaN(parsedDate.getTime())) {
+        res.status(400).json({ message: "Invalid movement date" });
+        return;
+      }
+
+      await storage.moveAnimalsToField(animalIds, fieldId, {
+        movementDate: parsedDate,
+        note: note?.trim() || undefined,
+      });
+      res.json({ updated: animalIds.length });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: "Validation error", errors: error.errors });

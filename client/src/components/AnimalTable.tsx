@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, Edit, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Animal, PolledStatus } from "@shared/schema";
@@ -42,9 +43,19 @@ interface AnimalTableProps {
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onSearchChange?: (value: string) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
-export function AnimalTable({ animals, onView, onEdit, onDelete, onSearchChange }: AnimalTableProps) {
+export function AnimalTable({
+  animals,
+  onView,
+  onEdit,
+  onDelete,
+  onSearchChange,
+  selectedIds,
+  onToggleSelect,
+}: AnimalTableProps) {
   const getTypeColor = (type: string) => {
     return type === "dairy" ? "bg-chart-1 text-primary-foreground" : "bg-chart-3 text-primary-foreground";
   };
@@ -134,6 +145,7 @@ export function AnimalTable({ animals, onView, onEdit, onDelete, onSearchChange 
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10"></TableHead>
             <TableHead>{renderSortButton("Tag Number", "tagNumber")}</TableHead>
             <TableHead>{renderSortButton("Phenotype", "phenotype")}</TableHead>
             <TableHead>{renderSortButton("Type", "type")}</TableHead>
@@ -152,13 +164,21 @@ export function AnimalTable({ animals, onView, onEdit, onDelete, onSearchChange 
         <TableBody>
           {sortedAnimals.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="text-center text-muted-foreground">
+              <TableCell colSpan={12} className="text-center text-muted-foreground">
                 No animals found
               </TableCell>
             </TableRow>
           ) : (
             sortedAnimals.map((animal) => (
               <TableRow key={animal.id} data-testid={`row-animal-${animal.id}`}>
+                <TableCell>
+                  <Checkbox
+                    aria-label={`Select ${animal.tagNumber}`}
+                    checked={selectedIds?.has(animal.id) ?? false}
+                    onCheckedChange={() => onToggleSelect?.(animal.id)}
+                    data-testid={`checkbox-select-${animal.id}`}
+                  />
+                </TableCell>
                 <TableCell className="font-readable-mono font-medium" data-testid={`text-tag-${animal.id}`}>
                   {animal.tagNumber}
                 </TableCell>

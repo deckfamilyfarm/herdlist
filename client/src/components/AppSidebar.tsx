@@ -10,7 +10,7 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { Home, List, MapPin, Upload, BarChart3, MoveHorizontal, Scale, LogOut, Shield } from "lucide-react";
+import { Home, List, MapPin, Upload, BarChart3, Scale, LogOut, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -29,11 +29,6 @@ const menuItems = [
     title: "Properties & Fields",
     url: "/locations",
     icon: MapPin,
-  },
-  {
-    title: "Move Animals",
-    url: "/movements",
-    icon: MoveHorizontal,
   },
   {
     title: "Reports",
@@ -120,4 +115,3 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-

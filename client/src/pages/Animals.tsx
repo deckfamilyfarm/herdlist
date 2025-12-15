@@ -3,6 +3,7 @@ import { AnimalFormDialog } from "@/components/AnimalFormDialog";
 import { AnimalDetailDialog } from "@/components/AnimalDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -12,14 +13,14 @@ import {
 } from "@/components/ui/select";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, Search } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -29,12 +30,14 @@ import {
   type Animal,
   type AnimalStatus,
   type Field,
+  type Property,
   type PolledStatus,
 } from "@shared/schema";
 
 type StatusFilter = "all" | AnimalStatus;
 type PolledFilter = "all" | PolledStatus;
 type BetacaseinFilter = "all" | "A2/A2" | "A1" | "Not Tested";
+const NO_LOCATION_ID = "__NO_LOCATION__";
 
 const normalizePolledStatus = (value: any): PolledStatus => {
   if (value === "polled" || value === "horned" || value === "not tested") return value;
@@ -55,6 +58,12 @@ export default function Animals() {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [editingAnimal, setEditingAnimal] = useState<Animal | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMoveFieldId, setBulkMoveFieldId] = useState<string>("");
+  const [bulkMoveDate, setBulkMoveDate] = useState<string>(() =>
+    new Date().toISOString().split("T")[0],
+  );
+  const [bulkMoveNote, setBulkMoveNote] = useState<string>("");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef">("all");
@@ -70,6 +79,10 @@ export default function Animals() {
 
   const { data: fields = [] } = useQuery<Field[]>({
     queryKey: ['/api/fields'],
+  });
+
+  const { data: properties = [] } = useQuery<Property[]>({
+    queryKey: ['/api/properties'],
   });
 
   const deleteAnimalMutation = useMutation({
@@ -123,6 +136,42 @@ export default function Animals() {
     }
   };
 
+  const bulkMoveMutation = useMutation({
+    mutationFn: async ({
+      animalIds,
+      fieldId,
+      movementDate,
+      note,
+    }: {
+      animalIds: string[];
+      fieldId: string;
+      movementDate: string;
+      note?: string;
+    }) => {
+      await apiRequest("POST", "/api/animals/bulk-move", { animalIds, fieldId, movementDate, note });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/animals"] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/property-counts'] });
+      toast({
+        title: "Move complete",
+        description: `Moved ${variables.animalIds.length} animals to new field.`,
+      });
+      setSelectedIds(new Set());
+      setBulkMoveFieldId("");
+      setBulkMoveDate(new Date().toISOString().split("T")[0]);
+      setBulkMoveNote("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Move failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // ---------- Filtering logic ----------
   const searchLower = searchTerm.trim().toLowerCase();
 
@@ -173,7 +222,8 @@ export default function Animals() {
     // Field filter: if any selected, require match
     const matchesField =
       selectedFieldIds.size === 0 ||
-      (animal.currentFieldId && selectedFieldIds.has(animal.currentFieldId));
+      (animal.currentFieldId && selectedFieldIds.has(animal.currentFieldId)) ||
+      (!animal.currentFieldId && selectedFieldIds.has(NO_LOCATION_ID));
 
     return (
       matchesStatus &&
@@ -193,6 +243,31 @@ export default function Animals() {
       currentLocation: anyAnimal.currentFieldName ?? anyAnimal.currentLocation ?? "-",
     };
   });
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(displayAnimals.map((a) => a.id));
+      return new Set([...prev].filter((id) => validIds.has(id)));
+    });
+  }, [displayAnimals]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(displayAnimals.map((a) => a.id)));
+  };
+
+  const deselectAll = () => setSelectedIds(new Set());
 
   return (
     <div className="space-y-6">
@@ -227,43 +302,97 @@ export default function Animals() {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="min-w-[180px]" data-testid="dropdown-fields">
               {selectedFieldIds.size === 0
-                ? "All locations"
-                : `${selectedFieldIds.size} location${selectedFieldIds.size > 1 ? "s" : ""} selected`}
+                ? "All fields"
+                : `${selectedFieldIds.size} field${selectedFieldIds.size > 1 ? "s" : ""} selected`}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-64 max-h-80 overflow-y-auto">
-            <DropdownMenuLabel>Locations</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={selectedFieldIds.size === 0}
-              onCheckedChange={() => setSelectedFieldIds(new Set())}
+            <DropdownMenuLabel>Fields</DropdownMenuLabel>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                setSelectedFieldIds(new Set());
+              }}
               data-testid="checkbox-field-all"
+              className="flex items-center gap-2"
             >
-              All locations
-            </DropdownMenuCheckboxItem>
+              <Checkbox checked={selectedFieldIds.size === 0} className="pointer-events-none" />
+              All fields
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                setSelectedFieldIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(NO_LOCATION_ID)) {
+                    next.delete(NO_LOCATION_ID);
+                  } else {
+                    next.add(NO_LOCATION_ID);
+                  }
+                  return next;
+                });
+              }}
+              data-testid="checkbox-field-none"
+              className="flex items-center gap-2"
+            >
+              <Checkbox checked={selectedFieldIds.has(NO_LOCATION_ID)} className="pointer-events-none" />
+              No location
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             {fields.length === 0 ? (
               <div className="px-2 py-1.5 text-sm text-muted-foreground">No fields available</div>
             ) : (
-              fields.map((field) => (
-                <DropdownMenuCheckboxItem
-                  key={field.id}
-                  checked={selectedFieldIds.has(field.id)}
-                  onCheckedChange={(val) => {
-                    setSelectedFieldIds((prev) => {
-                      const next = new Set(prev);
-                      if (val === true) {
-                        next.add(field.id);
-                      } else {
-                        next.delete(field.id);
-                      }
-                      return next;
-                    });
-                  }}
-                  data-testid={`checkbox-field-${field.id}`}
-                >
-                  {field.name}
-                </DropdownMenuCheckboxItem>
-              ))
+              (() => {
+                const propertyNameById = new Map<string, string>();
+                properties.forEach((p) => propertyNameById.set(p.id, p.name));
+
+                const fieldsByProperty = new Map<string, Field[]>();
+                fields.forEach((field) => {
+                  const propId = field.propertyId || "unknown";
+                  const arr = fieldsByProperty.get(propId) ?? [];
+                  arr.push(field);
+                  fieldsByProperty.set(propId, arr);
+                });
+
+                const sortedPropertyIds = Array.from(fieldsByProperty.keys()).sort((a, b) => {
+                  const nameA = propertyNameById.get(a) ?? "Unknown property";
+                  const nameB = propertyNameById.get(b) ?? "Unknown property";
+                  return nameA.localeCompare(nameB);
+                });
+
+                return sortedPropertyIds.map((propId) => {
+                  const propName = propertyNameById.get(propId) ?? "Unknown property";
+                  const sortedFields = (fieldsByProperty.get(propId) ?? []).sort((a, b) =>
+                    a.name.localeCompare(b.name),
+                  );
+                  return (
+                    <div key={propId}>
+                      <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">
+                        {propName}
+                      </DropdownMenuLabel>
+                      {sortedFields.map((field) => (
+                        <DropdownMenuItem
+                          key={field.id}
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setSelectedFieldIds((prev) => {
+                              const next = new Set(prev);
+                              next.has(field.id) ? next.delete(field.id) : next.add(field.id);
+                              return next;
+                            });
+                          }}
+                          data-testid={`checkbox-field-${field.id}`}
+                          className="flex items-center gap-2 pl-4"
+                        >
+                          <Checkbox checked={selectedFieldIds.has(field.id)} className="pointer-events-none" />
+                          {field.name}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                    </div>
+                  );
+                });
+              })()
             )}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -359,51 +488,96 @@ export default function Animals() {
         </Select>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="min-w-[180px]" data-testid="dropdown-fields">
-              {selectedFieldIds.size === 0
-                ? "All locations"
-                : `${selectedFieldIds.size} location${selectedFieldIds.size > 1 ? "s" : ""} selected`}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-64 max-h-80 overflow-y-auto">
-            <DropdownMenuLabel>Locations</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={selectedFieldIds.size === 0}
-              onCheckedChange={() => setSelectedFieldIds(new Set())}
-              data-testid="checkbox-field-all"
-            >
-              All locations
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            {fields.length === 0 ? (
-              <div className="px-2 py-1.5 text-sm text-muted-foreground">No fields available</div>
-            ) : (
-              fields.map((field) => (
-                <DropdownMenuCheckboxItem
-                  key={field.id}
-                  checked={selectedFieldIds.has(field.id)}
-                  onCheckedChange={(val) => {
-                    setSelectedFieldIds((prev) => {
-                      const next = new Set(prev);
-                      if (val === true) {
-                        next.add(field.id);
-                      } else {
-                        next.delete(field.id);
-                      }
-                      return next;
-                    });
-                  }}
-                  data-testid={`checkbox-field-${field.id}`}
-                >
-                  {field.name}
-                </DropdownMenuCheckboxItem>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between border rounded-md p-3">
+        <div className="flex flex-wrap gap-2 items-center">
+          <Button variant="outline" onClick={selectAllVisible} disabled={displayAnimals.length === 0} data-testid="button-select-all">
+            Select all ({displayAnimals.length})
+          </Button>
+          <Button variant="outline" onClick={deselectAll} disabled={selectedIds.size === 0} data-testid="button-deselect-all">
+            Deselect all
+          </Button>
+          <span className="text-sm text-muted-foreground">Selected: {selectedIds.size}</span>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Select value={bulkMoveFieldId} onValueChange={(val) => setBulkMoveFieldId(val)}>
+            <SelectTrigger className="w-48" data-testid="select-bulk-move-field">
+              <SelectValue placeholder="Move to field" />
+            </SelectTrigger>
+            <SelectContent>
+              {fields.length === 0 ? (
+                <SelectItem value="none" disabled>
+                  No fields available
+                </SelectItem>
+              ) : (
+                (() => {
+                  const propertyNameById = new Map<string, string>();
+                  properties.forEach((p) => propertyNameById.set(p.id, p.name));
+
+                  const fieldsByProperty = new Map<string, Field[]>();
+                  fields.forEach((field) => {
+                    const propId = field.propertyId || "unknown";
+                    const arr = fieldsByProperty.get(propId) ?? [];
+                    arr.push(field);
+                    fieldsByProperty.set(propId, arr);
+                  });
+
+                  const sortedPropertyIds = Array.from(fieldsByProperty.keys()).sort((a, b) => {
+                    const nameA = propertyNameById.get(a) ?? "Unknown property";
+                    const nameB = propertyNameById.get(b) ?? "Unknown property";
+                    return nameA.localeCompare(nameB);
+                  });
+
+                  return sortedPropertyIds.map((propId) => {
+                    const propName = propertyNameById.get(propId) ?? "Unknown property";
+                    const sortedFields = (fieldsByProperty.get(propId) ?? []).sort((a, b) =>
+                      a.name.localeCompare(b.name),
+                    );
+                    return (
+                      <div key={propId}>
+                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">{propName}</div>
+                        {sortedFields.map((field) => (
+                          <SelectItem key={field.id} value={field.id}>
+                            {field.name}
+                          </SelectItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                      </div>
+                    );
+                  });
+                })()
+              )}
+            </SelectContent>
+          </Select>
+          <Input
+            type="date"
+            value={bulkMoveDate}
+            onChange={(e) => setBulkMoveDate(e.target.value)}
+            className="w-40"
+            max={new Date().toISOString().split("T")[0]}
+            data-testid="input-bulk-move-date"
+          />
+          <Input
+            placeholder="Optional note"
+            value={bulkMoveNote}
+            onChange={(e) => setBulkMoveNote(e.target.value)}
+            className="w-48"
+            data-testid="input-bulk-move-note"
+          />
+          <Button
+            onClick={() =>
+              bulkMoveMutation.mutate({
+                animalIds: Array.from(selectedIds),
+                fieldId: bulkMoveFieldId,
+                movementDate: bulkMoveDate,
+                note: bulkMoveNote.trim() || undefined,
+              })
+            }
+            disabled={selectedIds.size === 0 || !bulkMoveFieldId || !bulkMoveDate || bulkMoveMutation.isPending}
+            data-testid="button-bulk-move"
+          >
+            {bulkMoveMutation.isPending ? "Moving..." : "Move selected"}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -417,6 +591,8 @@ export default function Animals() {
           onEdit={handleEditAnimal}
           onDelete={handleDeleteAnimal}
           onSearchChange={setSearchTerm}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
         />
       )}
 

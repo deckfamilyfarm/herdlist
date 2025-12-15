@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, sql, and, or, gte, desc } from "drizzle-orm";
+import { eq, sql, and, or, gte, desc, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
 import crypto from "crypto";
@@ -136,6 +136,13 @@ export interface IStorage {
   getAllSlaughterRecords(): Promise<SlaughterRecord[]>;
   getSlaughterRecordById(id: string): Promise<SlaughterRecord | undefined>;
   deleteSlaughterRecord(id: string): Promise<void>;
+
+  // Bulk updates
+  moveAnimalsToField(
+    animalIds: string[],
+    fieldId: string,
+    options?: { movementDate?: Date; note?: string },
+  ): Promise<void>;
 
   // Bulk Import
   bulkCreateAnimals(animals: InsertAnimal[]): Promise<Animal[]>;
@@ -674,6 +681,41 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ---------- Bulk Import ----------
+
+  async moveAnimalsToField(
+    animalIds: string[],
+    fieldId: string,
+    options?: { movementDate?: Date; note?: string },
+  ): Promise<void> {
+    if (animalIds.length === 0) return;
+    const movementDate = options?.movementDate ?? new Date();
+    const note = options?.note ?? null;
+
+    const currentStates = await db
+      .select({
+        id: animals.id,
+        currentFieldId: animals.currentFieldId,
+      })
+      .from(animals)
+      .where(inArray(animals.id, animalIds));
+
+    await db.transaction(async (tx) => {
+      await tx.update(animals).set({ currentFieldId: fieldId }).where(inArray(animals.id, animalIds));
+
+      const movementRows = currentStates.map((animal) => ({
+        id: crypto.randomUUID(),
+        animalId: animal.id,
+        fromFieldId: animal.currentFieldId,
+        toFieldId: fieldId,
+        movementDate,
+        notes: note,
+      }));
+
+      if (movementRows.length > 0) {
+        await tx.insert(movements).values(movementRows);
+      }
+    });
+  }
 
   async bulkCreateAnimals(animalList: InsertAnimal[]): Promise<Animal[]> {
     if (animalList.length === 0) return [];
