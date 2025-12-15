@@ -115,6 +115,7 @@ export interface IStorage {
 
   // Notes
   createNote(note: InsertNote): Promise<Note>;
+  bulkCreateNotes(notes: InsertNote[]): Promise<Note[]>;
   getNotesByAnimalId(animalId: string): Promise<Note[]>;
   updateNote(id: string, note: Partial<InsertNote>): Promise<Note | undefined>;
   deleteNote(id: string): Promise<void>;
@@ -633,6 +634,16 @@ export class DatabaseStorage implements IStorage {
     await db.insert(notes).values({ ...(note as any), id });
     const [created] = await db.select().from(notes).where(eq(notes.id, id));
     return created as Note;
+  }
+
+  async bulkCreateNotes(noteList: InsertNote[]): Promise<Note[]> {
+    if (noteList.length === 0) return [];
+    const withIds = noteList.map((n) => ({
+      ...(n as any),
+      id: crypto.randomUUID(),
+    }));
+    await db.insert(notes).values(withIds);
+    return [];
   }
 
   async getNotesByAnimalId(animalId: string): Promise<Note[]> {

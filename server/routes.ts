@@ -21,6 +21,7 @@ import {
   csvEventSchema,
   csvCalvingRecordSchema,
   csvSlaughterRecordSchema,
+  csvNoteSchema,
   signupSchema,
   loginSchema,
   changePasswordSchema,
@@ -39,6 +40,7 @@ import {
   type Note,
   type BreedingRecord,
   type InsertBreedingRecord,
+  type CsvNoteRow,
 } from "@shared/schema";
 import { z } from "zod";
 import Papa from "papaparse";
@@ -1157,7 +1159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         case "slaughter-records": {
           const validRecords: InsertSlaughterRecord[] = [];
-          
+
           for (let i = 0; i < parsed.data.length; i++) {
             const row = parsed.data[i];
             try {
@@ -1190,6 +1192,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (validRecords.length > 0) {
             await storage.bulkCreateSlaughterRecords(validRecords);
             result.success = validRecords.length;
+          }
+          break;
+        }
+
+        case "notes": {
+          const validNotes: InsertNote[] = [];
+
+          for (let i = 0; i < parsed.data.length; i++) {
+            const row = parsed.data[i];
+            try {
+              const csvRow: CsvNoteRow = csvNoteSchema.parse(row);
+              const animal = await storage.getAnimalByTagNumber(csvRow.tagNumber);
+              if (!animal) {
+                throw new Error("Animal not found for tagNumber");
+              }
+              validNotes.push({
+                animalId: animal.id,
+                note: csvRow.note,
+                noteDate: csvRow.noteDate,
+              });
+            } catch (error: any) {
+              result.failed++;
+              result.errors.push({
+                row: i + 1,
+                data: row,
+                error: error.message || "Validation failed",
+              });
+            }
+          }
+
+          if (validNotes.length > 0) {
+            await storage.bulkCreateNotes(validNotes);
+            result.success = validNotes.length;
           }
           break;
         }

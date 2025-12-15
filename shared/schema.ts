@@ -375,6 +375,22 @@ export const insertNoteSchema = createInsertSchema(notes, {
   createdAt: true,
 });
 
+export const csvNoteSchema = z
+  .object({
+    tagNumber: z.string().min(1).optional(),
+    tag_number: z.string().min(1).optional(),
+    note: z.string().min(1),
+    noteDate: z.string().min(1).optional(),
+    note_date: z.string().min(1).optional(),
+  })
+  .transform((val) => {
+    return {
+      tagNumber: (val.tagNumber || val.tag_number || "").toString(),
+      note: val.note,
+      noteDate: (val.noteDate || val.note_date || "").toString(),
+    };
+  });
+
 export const insertBreedingRecordSchema = createInsertSchema(breedingRecords, {
   breedingDate: dateOnlyOptional,
   exposureStartDate: dateOnlyOptional,
@@ -565,3 +581,5 @@ export type ImportResult = {
   failed: number;
   errors: string[];
 };
+
+export type CsvNoteRow = z.infer<typeof csvNoteSchema>;

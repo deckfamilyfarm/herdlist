@@ -213,25 +213,21 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
 
     const lines: string[] = [];
 
-    lines.push("Filter,Value");
-    lines.push(`As of Date,${filterSummary.asOfLabel}`);
-    lines.push(`Type,${filterSummary.typeLabel}`);
-    lines.push(`Status,${filterSummary.statusLabel}`);
-    lines.push(`Fields,${filterSummary.fieldsLabel}`);
-    lines.push("");
-
-    lines.push("tag_number,phenotype,type,date_of_birth,age,organic");
+    lines.push("tag_number,phenotype,type,date_of_birth,age,organic,note,noteDate");
     sortedAnimals.forEach((animal) => {
       const dob = (animal.dateOfBirth as any as string) || "";
       const age = formatAge(dob || null);
+      const dobValue = dob ? dob.split("T")[0] : "";
       const phenotype = (animal.phenotype || "").replace(/\"/g, '""');
       const row = [
         `"${animal.tagNumber.replace(/\"/g, '""')}"`,
         `"${phenotype}"`,
         animal.type,
-        dob,
+        dobValue,
         `"${age}"`,
         animal.organic ? "yes" : "no",
+        "", // note placeholder
+        filterSummary.asOfLabel, // default noteDate (today or as-of date)
       ];
       lines.push(row.join(","));
     });

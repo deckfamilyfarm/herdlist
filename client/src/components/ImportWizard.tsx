@@ -18,6 +18,7 @@ const DATA_TYPES = [
   { value: "events", label: "Events" },
   { value: "calving-records", label: "Calving Records" },
   { value: "slaughter-records", label: "Slaughter Records" },
+  { value: "notes", label: "Notes" },
 ] as const;
 
 const CSV_TEMPLATES: Record<string, string[]> = {
@@ -40,6 +41,7 @@ const CSV_TEMPLATES: Record<string, string[]> = {
   events: ["animalTag", "eventType", "eventDate", "description"],
   "calving-records": ["damTag", "calvingDate", "calfTag", "calfSex", "notes"],
   "slaughter-records": ["animalTag", "slaughterDate", "ageMonths", "liveWeight", "hangingWeight", "processor"],
+  notes: ["tagNumber", "noteDate", "note"],
 };
 
 const FORMAT_NOTES: Record<string, string[]> = {
@@ -80,6 +82,12 @@ const FORMAT_NOTES: Record<string, string[]> = {
     "animalTag must match existing animal",
     "slaughterDate: YYYY-MM-DD",
     "Weights: decimal numbers",
+  ],
+  notes: [
+    "tagNumber: animal tag to attach the note",
+    "noteDate: YYYY-MM-DD",
+    "note: free text",
+    "Additional columns are ignored",
   ],
 };
 
