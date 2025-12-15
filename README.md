@@ -1,4 +1,4 @@
-# Herd Management System
+# Herdlist Management System
 
 A comprehensive livestock management application for dairy and beef cattle operations. Track breeding records, animal locations, movements, vaccinations, health events, calving history, and slaughter records.
 
