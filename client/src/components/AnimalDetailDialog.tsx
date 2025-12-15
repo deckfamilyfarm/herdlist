@@ -90,6 +90,25 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     return str.includes("T") ? str.split("T")[0] : str;
   };
 
+  const formatPolledStatus = (value: any) => {
+    const normalized = (() => {
+      if (value === "polled" || value === "horned" || value === "not tested") return value;
+      if (value === true) return "polled";
+      if (value === false) return "not tested";
+      const normalizedVal = typeof value === "string" ? value.trim().toLowerCase() : "";
+      if (normalizedVal === "polled") return "polled";
+      if (normalizedVal === "horned") return "horned";
+      if (normalizedVal === "not tested" || normalizedVal === "not_tested" || normalizedVal === "nottested") {
+        return "not tested";
+      }
+      return "not tested";
+    })();
+
+    return normalized === "not tested"
+      ? "Not Tested"
+      : normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  };
+
   const { data: vaccinations = [], isLoading: vaccinationsLoading } = useQuery<Vaccination[]>({
     queryKey: ['/api/vaccinations/animal', animal.id],
     enabled: open,
@@ -266,8 +285,8 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                     <span className="font-medium">{(animal as any).betacasein || 'Not Tested'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Polled</span>
-                    <span className="font-medium">{animal.polled ? 'Yes' : 'No'}</span>
+                    <span className="text-muted-foreground">Horn Status</span>
+                    <span className="font-medium">{formatPolledStatus(animal.polled)}</span>
                   </div>
                   {/* ✅ Status row */}
                   <div className="flex justify-between">

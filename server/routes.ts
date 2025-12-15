@@ -912,7 +912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 organic: csvRow.organic || false,
                 phenotype: csvRow.phenotype || null,
                 betacasein: csvRow.betacasein || null,
-                polled: csvRow.polled || false,
+                polled: csvRow.polled ?? "not tested",
               });
             } catch (error: any) {
               result.failed++;

@@ -10,7 +10,31 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, Edit, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { Animal } from "@shared/schema";
+import type { Animal, PolledStatus } from "@shared/schema";
+
+const normalizePolledStatus = (value: any): PolledStatus => {
+  if (value === "polled" || value === "horned" || value === "not tested") return value;
+  if (value === true) return "polled";
+  if (value === false) return "not tested";
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "polled") return "polled";
+  if (normalized === "horned") return "horned";
+  if (normalized === "not tested" || normalized === "not_tested" || normalized === "nottested") {
+    return "not tested";
+  }
+  return "not tested";
+};
+
+const formatPolledStatus = (value: any) => {
+  const normalized = normalizePolledStatus(value);
+  return normalized === "not tested" ? "Not Tested" : normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const polledRank: Record<PolledStatus, number> = {
+  polled: 0,
+  horned: 1,
+  "not tested": 2,
+};
 
 interface AnimalTableProps {
   animals: (Animal & { currentLocation?: string })[];
@@ -88,7 +112,7 @@ export function AnimalTable({ animals, onView, onEdit, onDelete, onSearchChange 
           case "betacasein":
             return (animal as any).betacasein || "";
           case "polled":
-            return animal.polled ? 1 : 0;
+            return polledRank[normalizePolledStatus((animal as any).polled)];
           case "dateOfBirth":
           default:
             return animal.dateOfBirth ? new Date(animal.dateOfBirth as any).getTime() : 0;
@@ -121,7 +145,7 @@ export function AnimalTable({ animals, onView, onEdit, onDelete, onSearchChange 
             <TableHead>{renderSortButton("Sire", "sireTagNumber")}</TableHead>
             <TableHead>{renderSortButton("Dam", "damTagNumber")}</TableHead>
             <TableHead>{renderSortButton("A2", "betacasein")}</TableHead>
-            <TableHead>{renderSortButton("Polled", "polled")}</TableHead>
+            <TableHead>{renderSortButton("Horn Status", "polled")}</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -190,7 +214,7 @@ export function AnimalTable({ animals, onView, onEdit, onDelete, onSearchChange 
                   )}
                 </TableCell>
                 <TableCell>{(animal as any).betacasein || "Not Tested"}</TableCell>
-                <TableCell>{animal.polled ? "Yes" : "No"}</TableCell>
+                <TableCell>{formatPolledStatus((animal as any).polled)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button

@@ -3,7 +3,6 @@ import { AnimalFormDialog } from "@/components/AnimalFormDialog";
 import { AnimalDetailDialog } from "@/components/AnimalDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -24,11 +23,31 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { animalStatusEnum, type Animal, type AnimalStatus, type Field } from "@shared/schema";
+import {
+  animalStatusEnum,
+  polledStatusEnum,
+  type Animal,
+  type AnimalStatus,
+  type Field,
+  type PolledStatus,
+} from "@shared/schema";
 
 type StatusFilter = "all" | AnimalStatus;
-type BooleanFilter = "all" | "yes" | "no";
+type PolledFilter = "all" | PolledStatus;
 type BetacaseinFilter = "all" | "A2/A2" | "A1" | "Not Tested";
+
+const normalizePolledStatus = (value: any): PolledStatus => {
+  if (value === "polled" || value === "horned" || value === "not tested") return value;
+  if (value === true) return "polled";
+  if (value === false) return "not tested";
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "polled") return "polled";
+  if (normalized === "horned") return "horned";
+  if (normalized === "not tested" || normalized === "not_tested" || normalized === "nottested") {
+    return "not tested";
+  }
+  return "not tested";
+};
 
 export default function Animals() {
   const { toast } = useToast();
@@ -40,7 +59,7 @@ export default function Animals() {
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef">("all");
   const [sexFilter, setSexFilter] = useState<"all" | "cow" | "bull" | "steer" | "stag" | "freemartin">("all");
-  const [polledFilter, setPolledFilter] = useState<BooleanFilter>("all");
+  const [polledFilter, setPolledFilter] = useState<PolledFilter>("all");
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all"); // default "all"
   const [betacaseinFilter, setBetacaseinFilter] = useState<BetacaseinFilter>("all");
@@ -148,9 +167,8 @@ export default function Animals() {
       betacaseinFilter === "all" || betacaseinStatus === betacaseinFilter;
 
     // Polled filter
-    const matchesPolled =
-      polledFilter === "all" ||
-      (polledFilter === "yes" ? animal.polled === true : animal.polled === false);
+    const polledStatus = normalizePolledStatus(anyAnimal.polled);
+    const matchesPolled = polledFilter === "all" || polledStatus === polledFilter;
 
     // Field filter: if any selected, require match
     const matchesField =
@@ -302,15 +320,20 @@ export default function Animals() {
         {/* Polled filter */}
         <Select
           value={polledFilter}
-          onValueChange={(val: BooleanFilter) => setPolledFilter(val)}
+          onValueChange={(val) => setPolledFilter(val as PolledFilter)}
         >
-          <SelectTrigger className="w-full sm:w-32" data-testid="select-filter-polled">
-            <SelectValue placeholder="Horn Genotype" />
+          <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-polled">
+            <SelectValue placeholder="Horn Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Horn Genotypes</SelectItem>
-            <SelectItem value="yes">Polled</SelectItem>
-            <SelectItem value="no">Horned</SelectItem>
+            <SelectItem value="all">All Horn Status</SelectItem>
+            {polledStatusEnum.map((status) => (
+              <SelectItem key={status} value={status}>
+                {status === "not tested"
+                  ? "Not Tested"
+                  : status.charAt(0).toUpperCase() + status.slice(1)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 

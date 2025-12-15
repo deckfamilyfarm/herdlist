@@ -28,8 +28,8 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { InsertAnimal, Animal, Field, AnimalStatus } from "@shared/schema";
-import { animalStatusEnum } from "@shared/schema";
+import type { InsertAnimal, Animal, Field, AnimalStatus, PolledStatus } from "@shared/schema";
+import { animalStatusEnum, polledStatusEnum } from "@shared/schema";
 
 interface AnimalFormDialogProps {
   open: boolean;
@@ -37,6 +37,24 @@ interface AnimalFormDialogProps {
   onSubmit?: (data: any) => void;
   animal?: Animal;
 }
+
+const normalizePolledStatus = (value: any): PolledStatus => {
+  if (value === "polled" || value === "horned" || value === "not tested") return value;
+  if (value === true) return "polled";
+  if (value === false) return "not tested";
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "polled") return "polled";
+  if (normalized === "horned") return "horned";
+  if (normalized === "not tested" || normalized === "not_tested" || normalized === "nottested") {
+    return "not tested";
+  }
+  return "not tested";
+};
+
+const polledOptions: PolledStatus[] = [
+  "not tested",
+  ...polledStatusEnum.filter((status) => status !== "not tested"),
+] as PolledStatus[];
 
 export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: AnimalFormDialogProps) {
   const { toast } = useToast();
@@ -51,7 +69,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     organic: boolean;
     phenotype: string;
     betacasein: string;
-    polled: boolean;
+    polled: PolledStatus;
     herdName: string;
     status: AnimalStatus;
   }>({
@@ -65,7 +83,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     organic: false,
     phenotype: "",
     betacasein: "",
-    polled: false,
+    polled: "not tested",
     herdName: "",
     status: "active",
   });
@@ -101,7 +119,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         organic: Boolean((animal as any).organic),
         phenotype: animal.phenotype || "",
         betacasein: (animal as any).betacasein || "",
-        polled: Boolean(animal.polled),
+        polled: normalizePolledStatus((animal as any).polled),
         herdName: animal.herdName || "",
         status: (animal.status as AnimalStatus) ?? "active",
       });
@@ -117,7 +135,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         organic: false,
         phenotype: "",
         betacasein: "",
-        polled: false,
+        polled: "not tested",
         herdName: "",
         status: "active",
       });
@@ -149,7 +167,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         organic: false,
         phenotype: "",
         betacasein: "",
-        polled: false,
+        polled: "not tested",
         herdName: "",
         status: "active",
       });
@@ -211,7 +229,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       status: formData.status,
       phenotype: formData.phenotype.trim() || null,
       betacasein: formData.betacasein || null,
-      polled: formData.polled,
+      polled: formData.polled || "not tested",
     };
     
     if (animal) {
@@ -497,16 +515,25 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="polled"
-              checked={formData.polled}
-              onCheckedChange={(checked) => setFormData({ ...formData, polled: checked === true })}
-              data-testid="checkbox-polled"
-            />
-            <Label htmlFor="polled" className="text-sm font-normal cursor-pointer">
-              Polled
-            </Label>
+          <div className="space-y-2">
+            <Label htmlFor="polled">Horn Status</Label>
+            <Select
+              value={formData.polled}
+              onValueChange={(value) => setFormData({ ...formData, polled: value as PolledStatus })}
+            >
+              <SelectTrigger id="polled" data-testid="select-polled">
+                <SelectValue placeholder="Select horn status" />
+              </SelectTrigger>
+              <SelectContent>
+                {polledOptions.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status === "not tested"
+                      ? "Not Tested"
+                      : status.charAt(0).toUpperCase() + status.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="phenotype">Phenotype</Label>

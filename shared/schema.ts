@@ -64,6 +64,40 @@ export const animalStatusEnum = [
 
 export type AnimalStatus = (typeof animalStatusEnum)[number];
 
+// Polled status enum (replaces boolean)
+export const polledStatusEnum = ["polled", "horned", "not tested"] as const;
+export type PolledStatus = (typeof polledStatusEnum)[number];
+
+const normalizePolledValue = (
+  val: unknown,
+): PolledStatus | undefined | "invalid" => {
+  if (val === undefined || val === null || val === "") return undefined;
+
+  if (val === true || val === 1) return "polled";
+  if (val === false || val === 0) return "not tested";
+
+  if (typeof val === "string") {
+    const normalized = val.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (normalized === "polled") return "polled";
+    if (normalized === "horned") return "horned";
+    if (
+      normalized === "not tested" ||
+      normalized === "not_tested" ||
+      normalized === "nottested" ||
+      normalized === "untested"
+    ) {
+      return "not tested";
+    }
+    if (normalized === "true" || normalized === "yes" || normalized === "y") return "polled";
+    if (normalized === "false" || normalized === "no" || normalized === "n" || normalized === "0") {
+      return "not tested";
+    }
+  }
+
+  return "invalid";
+};
+
 // Export herd name enum for use in forms and validation
 export const herdNameEnum = mysqlEnum("herd_name", [
   "wet",
@@ -93,7 +127,7 @@ export const animals = mysqlTable("animals", {
   currentFieldId: varchar("current_field_id", { length: 36 }),
   organic: boolean("organic").default(false),
   phenotype: varchar("phenotype", { length: 1000 }),
-  polled: boolean("polled").default(false),
+  polled: mysqlEnum("polled", polledStatusEnum).default("not tested"),
   betacasein: mysqlEnum("betacasein", ["A2/A2", "A1", "Not Tested"]),
   herdName: herdNameEnum,
   status: mysqlEnum("status", animalStatusEnum).notNull().default("active"),
@@ -248,6 +282,21 @@ export const users = mysqlTable("users", {
 export const insertAnimalSchema = createInsertSchema(animals, {
   // DATE column -> normalized YYYY-MM-DD string
   dateOfBirth: dateOnlyOptional,
+  polled: z
+    .any()
+    .optional()
+    .transform((val, ctx) => {
+      const normalized = normalizePolledValue(val);
+      if (normalized === "invalid") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Invalid polled value. Use polled, horned, or not tested.",
+          path: ["polled"],
+        });
+        return undefined;
+      }
+      return normalized;
+    }),
 }).omit({
   id: true,
   createdAt: true,
@@ -369,9 +418,15 @@ export const csvAnimalSchema = z.object({
     .transform((val) => val?.toLowerCase() === "true"),
   phenotype: z.string().optional(),
   polled: z
-    .string()
+    .any()
     .optional()
-    .transform((val) => val?.toLowerCase() === "true"),
+    .transform((val) => {
+      const normalized = normalizePolledValue(val);
+      if (normalized === "invalid") {
+        throw new Error("Invalid polled value. Use polled, horned, or not tested.");
+      }
+      return normalized;
+    }),
   betacasein: z.enum(["A2/A2", "A1", "Not Tested"]).optional(),
   herdName: z
     .enum([

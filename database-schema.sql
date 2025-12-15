@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS `animals` (
   `organic` BOOLEAN DEFAULT FALSE,
   `phenotype` VARCHAR(1000),
   `betacasein` ENUM('A2/A2','A1','Not Tested'),
-  `polled` BOOLEAN DEFAULT FALSE,
+  `polled` ENUM('polled','horned','not tested') DEFAULT 'not tested',
   `herd_name` ENUM('wet', 'nurse', 'finish', 'main', 'grafting', 'yearling', 'missing', 'bull'),
   `status` ENUM('active', 'slaughtered', 'expired') NOT NULL DEFAULT 'active',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

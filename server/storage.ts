@@ -36,9 +36,39 @@ import {
   type InsertNote,
   type BreedingRecord,
   type InsertBreedingRecord,
+  type PolledStatus,
 } from "@shared/schema";
 
 console.log("DB check:", typeof (db as any).insert, typeof (db as any).select);
+
+const normalizePolledStatus = (value: any): PolledStatus => {
+  if (value === "polled" || value === "horned" || value === "not tested") {
+    return value;
+  }
+
+  if (value === true || value === 1) return "polled";
+  if (value === false || value === 0) return "not tested";
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "polled") return "polled";
+    if (normalized === "horned") return "horned";
+    if (
+      normalized === "not tested" ||
+      normalized === "not_tested" ||
+      normalized === "nottested" ||
+      normalized === "untested"
+    ) {
+      return "not tested";
+    }
+    if (normalized === "true" || normalized === "yes" || normalized === "y") return "polled";
+    if (normalized === "false" || normalized === "no" || normalized === "n" || normalized === "0") {
+      return "not tested";
+    }
+  }
+
+  return "not tested";
+};
 
 export interface IStorage {
   // Animals
@@ -144,14 +174,16 @@ export class DatabaseStorage implements IStorage {
 
   async createAnimal(animal: InsertAnimal): Promise<Animal> {
     const id = crypto.randomUUID();
+    const polledValue = normalizePolledStatus((animal as any).polled);
 
     await db.insert(animals).values({
       ...(animal as any),
+      polled: polledValue,
       id,
     });
 
     const [created] = await db.select().from(animals).where(eq(animals.id, id));
-    return created as Animal;
+    return { ...(created as any), polled: normalizePolledStatus((created as any).polled) } as Animal;
   }
 
   async getAllAnimals(): Promise<Animal[]> {
@@ -184,18 +216,28 @@ export class DatabaseStorage implements IStorage {
     .leftJoin(sireAnimals, eq(animals.sireId, sireAnimals.id))
     .leftJoin(damAnimals, eq(animals.damId, damAnimals.id));
 
-  return result as Animal[];
+  return result.map((animal) => ({
+    ...(animal as any),
+    polled: normalizePolledStatus((animal as any).polled),
+  })) as Animal[];
 }
 
   async getAnimalById(id: string): Promise<Animal | undefined> {
     const [animal] = await db.select().from(animals).where(eq(animals.id, id));
-    return animal;
+    return animal ? ({ ...(animal as any), polled: normalizePolledStatus((animal as any).polled) } as Animal) : undefined;
   }
 
   async updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined> {
-    await db.update(animals).set(animal).where(eq(animals.id, id));
+    const updateData: Partial<InsertAnimal> = { ...(animal as any) };
+    if (Object.prototype.hasOwnProperty.call(animal, "polled")) {
+      updateData.polled = normalizePolledStatus((animal as any).polled);
+    }
+
+    await db.update(animals).set(updateData).where(eq(animals.id, id));
     const [updated] = await db.select().from(animals).where(eq(animals.id, id));
-    return updated;
+    return updated
+      ? ({ ...(updated as any), polled: normalizePolledStatus((updated as any).polled) } as Animal)
+      : undefined;
   }
 
   async deleteAnimal(id: string): Promise<void> {
@@ -234,7 +276,10 @@ export class DatabaseStorage implements IStorage {
       )
       .groupBy(animals.id);
 
-    return result as Animal[];
+    return result.map((animal) => ({
+      ...(animal as any),
+      polled: normalizePolledStatus((animal as any).polled),
+    })) as Animal[];
   }
 
   async getOffspringByParentId(parentId: string): Promise<Animal[]> {
@@ -260,7 +305,10 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(fields, eq(animals.currentFieldId, fields.id))
       .where(or(eq(animals.sireId, parentId), eq(animals.damId, parentId)));
 
-    return result as Animal[];
+    return result.map((animal) => ({
+      ...(animal as any),
+      polled: normalizePolledStatus((animal as any).polled),
+    })) as Animal[];
   }
 
   // ---------- Properties ----------
@@ -631,6 +679,7 @@ export class DatabaseStorage implements IStorage {
     if (animalList.length === 0) return [];
     const withIds = animalList.map((a) => ({
       ...(a as any),
+      polled: normalizePolledStatus((a as any).polled),
       id: crypto.randomUUID(),
     }));
 
@@ -711,7 +760,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAnimalByTagNumber(tagNumber: string): Promise<Animal | undefined> {
     const [animal] = await db.select().from(animals).where(eq(animals.tagNumber, tagNumber));
-    return animal;
+    return animal ? ({ ...(animal as any), polled: normalizePolledStatus((animal as any).polled) } as Animal) : undefined;
   }
 
   async getPropertyByName(name: string): Promise<Property | undefined> {

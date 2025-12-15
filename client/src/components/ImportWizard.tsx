@@ -50,7 +50,7 @@ const FORMAT_NOTES: Record<string, string[]> = {
     "herdName: wet, nurse, finish, main, grafting, or yearlings",
     "organic: true or false",
     "betacasein: A2/A2, A1, or Not Tested",
-    "polled: true or false",
+    "polled: polled, horned, or not tested (true/false accepted)",
     "phenotype: free text",
     "Use the Movements feature to assign animals to fields",
   ],
