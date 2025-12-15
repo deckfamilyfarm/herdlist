@@ -14,16 +14,8 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
-import type {
-  Animal,
-  Field,
-  Property,
-  AnimalStatus,
-} from "@shared/schema";
-import type {
-  AnimalTypeFilter,
-  StatusFilter,
-} from "@/components/ReportFilters";
+import type { Animal, Field, Property, AnimalStatus } from "@shared/schema";
+import type { AnimalTypeFilter, StatusFilter } from "@/components/ReportFilters";
 
 interface PropertyCount {
   property: string; // display name
@@ -42,24 +34,26 @@ export default function Reports() {
     queryKey: ["/api/fields"],
   });
 
-  const { data: properties = [], isLoading: propertiesLoading } =
-    useQuery<Property[]>({
-      queryKey: ["/api/properties"],
-    });
+  const { data: properties = [], isLoading: propertiesLoading } = useQuery<Property[]>({
+    queryKey: ["/api/properties"],
+  });
 
   const isAnyLoading = animalsLoading || fieldsLoading || propertiesLoading;
 
   // ---- Filter state ----
   const [asOfDate, setAsOfDate] = useState<string>("");
-  const [animalType, setAnimalType] = useState<AnimalTypeFilter>("all");
-  const [propertyId, setPropertyId] = useState<"all" | string>("all");
-  const [status, setStatus] = useState<StatusFilter>("all");
+const [animalType, setAnimalType] = useState<AnimalTypeFilter>("all");
+const [status, setStatus] = useState<StatusFilter>("all");
+const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
+
+const NO_LOCATION_ID = "__NO_LOCATION__";
+
+  const fieldById = useMemo(() => new Map(fields.map((f) => [f.id, f])), [fields]);
+  const propertyById = useMemo(() => new Map(properties.map((p) => [p.id, p])), [properties]);
 
   // ---- Apply filters to animals ----
   const filteredAnimals = useMemo(() => {
     if (animals.length === 0) return [];
-
-    const fieldById = new Map(fields.map((f) => [f.id, f]));
 
     return animals.filter((animal) => {
       // Type filter
@@ -73,13 +67,13 @@ export default function Reports() {
         return false;
       }
 
-      // Property filter
-      if (propertyId !== "all") {
+      // Field/property selection filter
+      if (selectedFieldIds.size > 0) {
         const cfId = (animal as any).currentFieldId || animal.currentFieldId;
-        if (!cfId) return false;
-        const f = fieldById.get(cfId);
-        if (!f) return false;
-        if ((f.propertyId as string) !== propertyId) {
+        if (!cfId && !selectedFieldIds.has(NO_LOCATION_ID)) {
+          return false;
+        }
+        if (cfId && !selectedFieldIds.has(cfId as string)) {
           return false;
         }
       }
@@ -95,7 +89,7 @@ export default function Reports() {
 
       return true;
     });
-  }, [animals, fields, animalType, status, propertyId, asOfDate]);
+  }, [animals, fields, animalType, status, selectedFieldIds, asOfDate]);
 
   // ---- Herd summary from filtered animals ----
   const {
@@ -130,9 +124,6 @@ export default function Reports() {
       return [];
     }
 
-    const fieldById = new Map(fields.map((f) => [f.id, f]));
-    const propertyById = new Map(properties.map((p) => [p.id, p]));
-
     const map = new Map<
       string,
       { propertyId?: string; property: string; dairy: number; beef: number }
@@ -161,32 +152,89 @@ export default function Reports() {
     return Array.from(map.values()).sort((a, b) =>
       a.property.localeCompare(b.property),
     );
-  }, [filteredAnimals, fields, properties]);
+  }, [filteredAnimals, fieldById, propertyById]);
+
+  const filterSummary = useMemo(() => {
+    const typeLabel =
+      animalType === "all" ? "All" : animalType.charAt(0).toUpperCase() + animalType.slice(1);
+    const statusLabel =
+      status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1);
+    const asOfLabel = asOfDate || new Date().toISOString().split("T")[0];
+
+    const selectedFields = Array.from(selectedFieldIds).filter((id) => id !== NO_LOCATION_ID);
+    const fieldLabels = selectedFields
+      .map((id) => {
+        const field = fieldById.get(id);
+        if (!field) return null;
+        const prop = propertyById.get(field.propertyId as string);
+        return prop ? `${prop.name} / ${field.name}` : field.name;
+      })
+      .filter(Boolean) as string[];
+    if (selectedFieldIds.has(NO_LOCATION_ID)) {
+      fieldLabels.push("No location");
+    }
+    const fieldsLabel =
+      selectedFieldIds.size === 0 ? "All fields" : fieldLabels.sort((a, b) => a.localeCompare(b)).join("; ");
+
+    return { typeLabel, statusLabel, asOfLabel, fieldsLabel };
+  }, [animalType, status, asOfDate, selectedFieldIds, fieldById, propertyById]);
+
+  const ageFromDob = (dob?: string | Date | null) => {
+    if (!dob) return { years: "", months: "" };
+    const d = new Date(dob as any);
+    if (isNaN(d.getTime())) return { years: "", months: "" };
+    const now = new Date();
+    let months = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+    if (now.getDate() < d.getDate()) months -= 1;
+    const years = Math.floor(months / 12);
+    const remMonths = months % 12;
+    return { years: years.toString(), months: remMonths.toString() };
+  };
+
+  const formatAge = (dob?: string | Date | null) => {
+    const { years, months } = ageFromDob(dob);
+    const yNum = Number(years);
+    const mNum = Number(months);
+    const parts: string[] = [];
+    if (!isNaN(yNum)) {
+      parts.push(`${yNum} yr${yNum === 1 ? "" : "s"}`);
+    }
+    if (!isNaN(mNum)) {
+      parts.push(`${mNum} mo`);
+    }
+    return parts.join(", ");
+  };
 
   // ---- CSV download based on filtered data ----
-  const handleDownloadReport = () => {
+  const handleDownloadReportCsv = () => {
+    const sortedAnimals = [...filteredAnimals].sort((a, b) =>
+      a.tagNumber.localeCompare(b.tagNumber),
+    );
+
     const lines: string[] = [];
 
-    // Summary
-    lines.push("Section,Category,Count,Percentage");
-    lines.push(`Summary,Dairy Cows,${dairyCount},${dairyPercentage}`);
-    lines.push(`Summary,Beef Cattle,${beefCount},${beefPercentage}`);
-    lines.push(`Summary,Total Animals,${totalAnimals},100`);
+    lines.push("Filter,Value");
+    lines.push(`As of Date,${filterSummary.asOfLabel}`);
+    lines.push(`Type,${filterSummary.typeLabel}`);
+    lines.push(`Status,${filterSummary.statusLabel}`);
+    lines.push(`Fields,${filterSummary.fieldsLabel}`);
     lines.push("");
 
-    // Property breakdown
-    lines.push("Section,Property,Dairy,Beef,Total");
-    if (propertyCounts.length === 0) {
-      lines.push("Property Breakdown,No property data,0,0,0");
-    } else {
-      for (const pc of propertyCounts) {
-        const total = pc.dairy + pc.beef;
-        const propName = `"${pc.property.replace(/"/g, '""')}"`;
-        lines.push(
-          `Property Breakdown,${propName},${pc.dairy},${pc.beef},${total}`,
-        );
-      }
-    }
+    lines.push("tag_number,phenotype,type,date_of_birth,age,organic");
+    sortedAnimals.forEach((animal) => {
+      const dob = (animal.dateOfBirth as any as string) || "";
+      const age = formatAge(dob || null);
+      const phenotype = (animal.phenotype || "").replace(/\"/g, '""');
+      const row = [
+        `"${animal.tagNumber.replace(/\"/g, '""')}"`,
+        `"${phenotype}"`,
+        animal.type,
+        dob,
+        `"${age}"`,
+        animal.organic ? "yes" : "no",
+      ];
+      lines.push(row.join(","));
+    });
 
     const csvContent = lines.join("\n");
     const blob = new Blob([csvContent], {
@@ -201,6 +249,73 @@ export default function Reports() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadReportPdf = () => {
+    const sortedAnimals = [...filteredAnimals].sort((a, b) =>
+      a.tagNumber.localeCompare(b.tagNumber),
+    );
+
+    const rows = sortedAnimals
+      .map((animal) => {
+        const dob = (animal.dateOfBirth as any as string) || "";
+        const ageLabel = formatAge(dob || null);
+        return `
+          <tr>
+            <td style="border:1px solid #ccc;padding:4px;width:120px;"></td>
+            <td style="border:1px solid #ccc;padding:4px;">${animal.tagNumber}</td>
+            <td style="border:1px solid #ccc;padding:4px;">${animal.phenotype || ""}</td>
+            <td style="border:1px solid #ccc;padding:4px;">${animal.type}</td>
+            <td style="border:1px solid #ccc;padding:4px;">${dob ? dob.split("T")[0] : ""}</td>
+            <td style="border:1px solid #ccc;padding:4px;text-align:center;">${ageLabel}</td>
+            <td style="border:1px solid #ccc;padding:4px;text-align:center;">${animal.organic ? "Yes" : "No"}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const filtersHtml = `
+      <div style="margin-bottom:8px;font-size:12px;">
+        <div><strong>As of:</strong> ${filterSummary.asOfLabel}</div>
+        <div><strong>Type:</strong> ${filterSummary.typeLabel}</div>
+        <div><strong>Status:</strong> ${filterSummary.statusLabel}</div>
+        <div><strong>Fields:</strong> ${filterSummary.fieldsLabel}</div>
+      </div>
+    `;
+
+    const html = `
+      <html>
+        <head>
+          <title>Herd Report</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; padding: 16px;">
+          <h2>Herd Report</h2>
+          ${filtersHtml}
+          <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
+            <thead>
+              <tr>
+                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Notes</th>
+                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Tag Number</th>
+                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Phenotype</th>
+                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Type</th>
+                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Date of Birth</th>
+                <th style="border:1px solid #ccc;padding:4px;text-align:center;">Age</th>
+                <th style="border:1px solid #ccc;padding:4px;text-align:center;">Organic</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
   };
 
   return (
@@ -220,14 +335,30 @@ export default function Reports() {
         onAsOfDateChange={setAsOfDate}
         animalType={animalType}
         onAnimalTypeChange={setAnimalType}
-        propertyId={propertyId}
-        onPropertyIdChange={setPropertyId}
+        propertyId="all"
+        onPropertyIdChange={() => {}}
         status={status}
         onStatusChange={setStatus}
         properties={properties}
-        onExport={handleDownloadReport}
+        fields={fields}
+        selectedFieldIds={selectedFieldIds}
+        onSelectedFieldIdsChange={setSelectedFieldIds}
+        onExportCsv={handleDownloadReportCsv}
+        onExportPdf={handleDownloadReportPdf}
         onGenerate={undefined} // optional, everything is live-updating already
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Applied Filters</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+          <div><span className="text-muted-foreground">As of:</span> {filterSummary.asOfLabel}</div>
+          <div><span className="text-muted-foreground">Type:</span> {filterSummary.typeLabel}</div>
+          <div><span className="text-muted-foreground">Status:</span> {filterSummary.statusLabel}</div>
+          <div><span className="text-muted-foreground">Fields:</span> {filterSummary.fieldsLabel}</div>
+        </CardContent>
+      </Card>
 
       {/* Chart uses filtered per-property counts */}
       <HerdCompositionChart data={propertyCounts} />
@@ -236,14 +367,24 @@ export default function Reports() {
       <Card>
         <CardHeader className="flex items-center justify-between gap-2">
           <CardTitle>Herd Summary Report</CardTitle>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleDownloadReport}
-            disabled={isAnyLoading}
-          >
-            Download CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDownloadReportCsv}
+              disabled={isAnyLoading}
+            >
+              Download CSV
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDownloadReportPdf}
+              disabled={isAnyLoading}
+            >
+              Print
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {animalsLoading ? (
@@ -345,4 +486,3 @@ export default function Reports() {
     </div>
   );
 }
-
