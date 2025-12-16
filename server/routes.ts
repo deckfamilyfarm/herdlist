@@ -903,14 +903,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getAnimalsReadyToBreed(),
       ]);
 
+      const activeAnimals = allAnimals.filter((a: any) => (a.status ?? "active") === "active");
+      const activeReadyToBreed = readyToBreed.filter((a: any) => (a.status ?? "active") === "active");
+
       const stats = {
-        totalAnimals: allAnimals.length,
-        cowsReadyToBreed: readyToBreed.length,
-        animalsByType: allAnimals.reduce((acc, animal) => {
+        totalAnimals: activeAnimals.length,
+        cowsReadyToBreed: activeReadyToBreed.length,
+        animalsByType: activeAnimals.reduce((acc, animal) => {
           acc[animal.type] = (acc[animal.type] || 0) + 1;
           return acc;
         }, {} as Record<string, number>),
-        animalsBySex: allAnimals.reduce((acc, animal) => {
+        animalsBySex: activeAnimals.reduce((acc, animal) => {
           acc[animal.sex] = (acc[animal.sex] || 0) + 1;
           return acc;
         }, {} as Record<string, number>),

@@ -43,7 +43,7 @@ export default function Reports() {
   // ---- Filter state ----
   const [asOfDate, setAsOfDate] = useState<string>("");
 const [animalType, setAnimalType] = useState<AnimalTypeFilter>("all");
-const [status, setStatus] = useState<StatusFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>("active");
 const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
 
 const NO_LOCATION_ID = "__NO_LOCATION__";

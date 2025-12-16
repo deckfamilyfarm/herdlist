@@ -404,8 +404,8 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .select({
         property: properties.name,
-        dairy: sql<number>`count(case when ${animals.type} = 'dairy' then 1 end)`,
-        beef: sql<number>`count(case when ${animals.type} = 'beef' then 1 end)`,
+        dairy: sql<number>`count(case when ${animals.type} = 'dairy' and ${animals.status} = 'active' then 1 end)`,
+        beef: sql<number>`count(case when ${animals.type} = 'beef' and ${animals.status} = 'active' then 1 end)`,
       })
       .from(properties)
       .leftJoin(fields, eq(properties.id, fields.propertyId))

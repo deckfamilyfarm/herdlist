@@ -73,7 +73,7 @@ export default function Animals() {
   const [sexFilter, setSexFilter] = useState<"all" | "cow" | "bull" | "steer" | "stag" | "freemartin">("all");
   const [polledFilter, setPolledFilter] = useState<PolledFilter>("all");
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all"); // default "all"
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active"); // default "active"
   const [betacaseinFilter, setBetacaseinFilter] = useState<BetacaseinFilter>("all");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
