@@ -274,8 +274,9 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
       <html>
         <head>
           <title>Herd Report</title>
+          <style>body, table { font-family: "Roboto", sans-serif; }</style>
         </head>
-        <body style="font-family: Arial, sans-serif; padding: 16px;">
+        <body style="padding: 16px;">
           <h2>Herd Report</h2>
           <div style="margin-bottom:8px;font-size:12px;"><strong>Animals in report:</strong> ${sortedAnimals.length}</div>
           ${filtersHtml}
