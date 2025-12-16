@@ -174,6 +174,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         phenotype: "",
         betacasein: "",
         polled: "not tested",
+        tags: [],
         herdName: "",
         status: "active",
       });
@@ -549,9 +550,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                 <div key={tag} className="flex items-center space-x-2">
                   <Checkbox
                     id={`tag-${tag}`}
-                    checked={formData.tags.includes(tag)}
+                    checked={Array.isArray(formData.tags) && formData.tags.includes(tag)}
                     onCheckedChange={(checked) => {
-                      const next = new Set(formData.tags);
+                      const next = new Set(Array.isArray(formData.tags) ? formData.tags : []);
                       if (checked === true) {
                         next.add(tag);
                       } else {
