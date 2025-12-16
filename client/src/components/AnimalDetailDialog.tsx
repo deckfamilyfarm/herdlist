@@ -273,10 +273,6 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                     <span className="font-medium">{enrichedAnimal.currentFieldName || 'Not assigned'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Herd Name</span>
-                    <span className="font-medium capitalize">{animal.herdName || 'Not assigned'}</span>
-                  </div>
-                  <div className="flex justify-between">
                     <span className="text-muted-foreground">Organic</span>
                     <span className="font-medium">{animal.organic ? 'Yes' : 'No'}</span>
                   </div>
@@ -337,7 +333,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                       onValueChange={(value) =>
                         setBreedingForm((prev) => ({
                           ...prev,
-                          method: value as BreedingRecord["method"],
+                          method: value as BreedingRecord["method"] | "placeholder",
                         }))
                       }
                     >

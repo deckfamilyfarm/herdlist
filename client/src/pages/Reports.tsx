@@ -216,7 +216,7 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
         animal.type,
         dobValue,
         `"${age}"`,
-        animal.organic ? "yes" : "no",
+        animal.organic ? "OTCO" : "Natural",
         "", // note placeholder
         filterSummary.asOfLabel, // default noteDate (today or as-of date)
       ];
@@ -255,7 +255,7 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
             <td style="border:1px solid #ccc;padding:4px;">${animal.type}</td>
             <td style="border:1px solid #ccc;padding:4px;">${dob ? dob.split("T")[0] : ""}</td>
             <td style="border:1px solid #ccc;padding:4px;text-align:center;">${ageLabel}</td>
-            <td style="border:1px solid #ccc;padding:4px;text-align:center;">${animal.organic ? "Yes" : "No"}</td>
+            <td style="border:1px solid #ccc;padding:4px;text-align:center;">${animal.organic ? "OTCO" : "Natural"}</td>
           </tr>
         `;
       })

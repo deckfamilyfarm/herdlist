@@ -74,6 +74,7 @@ export function AnimalTable({
     | "sireTagNumber"
     | "damTagNumber"
     | "betacasein"
+    | "organic"
     | "polled"
     | "tags";
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -123,6 +124,8 @@ export function AnimalTable({
             return (animal as any).betacasein || "";
           case "polled":
             return polledRank[normalizePolledStatus((animal as any).polled)];
+          case "organic":
+            return animal.organic ? 1 : 0;
           case "tags":
             return Array.isArray((animal as any).tags) ? (animal as any).tags.join(",") : "";
           case "dateOfBirth":
@@ -158,6 +161,7 @@ export function AnimalTable({
             <TableHead>{renderSortButton("Sire", "sireTagNumber")}</TableHead>
             <TableHead>{renderSortButton("Dam", "damTagNumber")}</TableHead>
             <TableHead>{renderSortButton("A2", "betacasein")}</TableHead>
+            <TableHead>{renderSortButton("Organic", "organic")}</TableHead>
             <TableHead>{renderSortButton("Horn Status", "polled")}</TableHead>
             <TableHead>Tags</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -185,14 +189,14 @@ export function AnimalTable({
                   {animal.tagNumber}
                 </TableCell>
                 <TableCell>{animal.phenotype || "-"}</TableCell>
-                <TableCell>
-                  <Badge className={getTypeColor(animal.type)} data-testid={`badge-type-${animal.id}`}>
-                    {animal.type}
-                  </Badge>
-                </TableCell>
-                <TableCell className="capitalize">{animal.sex}</TableCell>
-                <TableCell className="font-readable-mono">{formatDate(animal.dateOfBirth)}</TableCell>
-                <TableCell>{animal.currentLocation || "-"}</TableCell>
+              <TableCell>
+                <Badge className={getTypeColor(animal.type)} data-testid={`badge-type-${animal.id}`}>
+                  {animal.type}
+                </Badge>
+              </TableCell>
+              <TableCell className="capitalize">{animal.sex}</TableCell>
+              <TableCell className="font-readable-mono">{formatDate(animal.dateOfBirth)}</TableCell>
+              <TableCell>{animal.currentLocation || "-"}</TableCell>
                 <TableCell className="font-readable-mono">
                   {(animal as any).sireTagNumber ? (
                     <button
@@ -236,6 +240,7 @@ export function AnimalTable({
                   )}
                 </TableCell>
                 <TableCell>{(animal as any).betacasein || "Not Tested"}</TableCell>
+                <TableCell>{animal.organic ? "OTCO" : "Natural"}</TableCell>
                 <TableCell>{formatPolledStatus((animal as any).polled)}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {Array.isArray((animal as any).tags) && (animal as any).tags.length > 0

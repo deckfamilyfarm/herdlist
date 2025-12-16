@@ -73,7 +73,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     betacasein: string;
     polled: PolledStatus;
     tags: string[];
-    herdName: string;
     status: AnimalStatus;
   }>({
     tagNumber: "",
@@ -88,7 +87,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     betacasein: "",
     polled: "not tested",
     tags: [],
-    herdName: "",
     status: "active",
   });
   const [sireOpen, setSireOpen] = useState(false);
@@ -125,7 +123,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         betacasein: (animal as any).betacasein || "",
         polled: normalizePolledStatus((animal as any).polled),
         tags: Array.isArray((animal as any).tags) ? (animal as any).tags : [],
-        herdName: animal.herdName || "",
         status: (animal.status as AnimalStatus) ?? "active",
       });
     } else {
@@ -142,7 +139,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         betacasein: "",
         polled: "not tested",
         tags: [],
-        herdName: "",
         status: "active",
       });
     }
@@ -175,7 +171,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         betacasein: "",
         polled: "not tested",
         tags: [],
-        herdName: "",
         status: "active",
       });
     },
@@ -223,16 +218,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       damId: formData.damId || null,
       currentFieldId: formData.currentFieldId || undefined,
       organic: Boolean(formData.organic),
-      herdName: (formData.herdName || null) as
-        | "wet"
-        | "nurse"
-        | "finish"
-        | "main"
-        | "grafting"
-        | "yearling"
-        | "missing"
-        | "bull"
-        | null,
       status: formData.status,
       phenotype: formData.phenotype.trim() || null,
       betacasein: formData.betacasein || null,
@@ -434,29 +419,6 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                     {f.name}
                   </SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="herdName">Herd Name</Label>
-            <Select
-              value={formData.herdName || "none"}
-              onValueChange={(value) =>
-                setFormData({ ...formData, herdName: value === "none" ? "" : value })
-              }
-            >
-              <SelectTrigger id="herdName" data-testid="select-herd-name">
-                <SelectValue placeholder="Select herd (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="wet">Wet</SelectItem>
-                <SelectItem value="nurse">Nurse</SelectItem>
-                <SelectItem value="finish">Finish</SelectItem>
-                <SelectItem value="main">Main</SelectItem>
-                <SelectItem value="grafting">Grafting</SelectItem>
-                <SelectItem value="yearling">Yearling</SelectItem>
-                <SelectItem value="bull">Bull</SelectItem>
               </SelectContent>
             </Select>
           </div>
