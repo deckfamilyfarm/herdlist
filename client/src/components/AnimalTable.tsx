@@ -9,7 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, Edit, Trash2 } from "lucide-react";
+import { Eye, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Animal, PolledStatus } from "@shared/schema";
 
@@ -40,7 +40,6 @@ const polledRank: Record<PolledStatus, number> = {
 interface AnimalTableProps {
   animals: (Animal & { currentLocation?: string })[];
   onView?: (id: string) => void;
-  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onSearchChange?: (value: string) => void;
   selectedIds?: Set<string>;
@@ -50,7 +49,6 @@ interface AnimalTableProps {
 export function AnimalTable({
   animals,
   onView,
-  onEdit,
   onDelete,
   onSearchChange,
   selectedIds,
@@ -246,28 +244,20 @@ export function AnimalTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onView?.(animal.id)}
-                      data-testid={`button-view-${animal.id}`}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onEdit?.(animal.id)}
-                      data-testid={`button-edit-${animal.id}`}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onDelete?.(animal.id)}
-                      data-testid={`button-delete-${animal.id}`}
-                    >
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onView?.(animal.id)}
+              data-testid={`button-view-${animal.id}`}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onDelete?.(animal.id)}
+              data-testid={`button-delete-${animal.id}`}
+            >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
