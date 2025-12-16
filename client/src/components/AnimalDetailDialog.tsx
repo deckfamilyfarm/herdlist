@@ -344,7 +344,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                         <SelectItem value="placeholder" disabled>
                           Choose Breeding Method
                         </SelectItem>
-                        <SelectItem value="observed_live_cover">Observed live cover</SelectItem>
+                        <SelectItem value="observed_live_cover">Live cover</SelectItem>
                         <SelectItem value="extended_exposure">Extended exposure</SelectItem>
                         <SelectItem value="ai">AI</SelectItem>
                       </SelectContent>
