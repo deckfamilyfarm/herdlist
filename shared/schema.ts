@@ -589,4 +589,4 @@ export type ImportResult = {
 
 export type CsvNoteRow = z.infer<typeof csvNoteSchema>;
 
-export const animalTagOptions = ["open", "wet", "bred", "grafting", "missing"] as const;
+export const animalTagOptions = ["open", "wet", "bred", "grafting", "missing", "cull"] as const;

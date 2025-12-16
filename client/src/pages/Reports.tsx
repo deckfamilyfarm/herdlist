@@ -186,23 +186,14 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
     const now = new Date();
     let months = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
     if (now.getDate() < d.getDate()) months -= 1;
-    const years = Math.floor(months / 12);
-    const remMonths = months % 12;
-    return { years: years.toString(), months: remMonths.toString() };
+    return { years: "", months: months.toString() };
   };
 
   const formatAge = (dob?: string | Date | null) => {
     const { years, months } = ageFromDob(dob);
-    const yNum = Number(years);
     const mNum = Number(months);
-    const parts: string[] = [];
-    if (!isNaN(yNum)) {
-      parts.push(`${yNum} yr${yNum === 1 ? "" : "s"}`);
-    }
-    if (!isNaN(mNum)) {
-      parts.push(`${mNum} mo`);
-    }
-    return parts.join(", ");
+    if (isNaN(mNum)) return "";
+    return `${mNum} mo`;
   };
 
   // ---- CSV download based on filtered data ----
@@ -286,6 +277,7 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
         </head>
         <body style="font-family: Arial, sans-serif; padding: 16px;">
           <h2>Herd Report</h2>
+          <div style="margin-bottom:8px;font-size:12px;"><strong>Animals in report:</strong> ${sortedAnimals.length}</div>
           ${filtersHtml}
           <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
             <thead>
