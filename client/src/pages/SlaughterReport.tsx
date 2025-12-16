@@ -58,6 +58,9 @@ export default function SlaughterReport() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/slaughter-records"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/animals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/property-counts"] });
       toast({
         title: "Success",
         description: "Slaughter record added successfully",
