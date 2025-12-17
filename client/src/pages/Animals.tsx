@@ -268,8 +268,26 @@ export default function Animals() {
     const polledStatus = normalizePolledStatus(anyAnimal.polled);
     const matchesPolled = polledFilter === "all" || polledStatus === polledFilter;
 
-    // Tags filter: require intersection if any selected
-    const animalTags: string[] = Array.isArray((anyAnimal as any).tags) ? (anyAnimal as any).tags : [];
+    // Tags filter: require intersection if any selected; normalize legacy string storage
+    const rawTags = (anyAnimal as any).tags;
+    const animalTags: string[] = (() => {
+      if (Array.isArray(rawTags)) return rawTags.map((t) => `${t}`.toLowerCase().trim());
+      if (typeof rawTags === "string") {
+        try {
+          const parsed = JSON.parse(rawTags);
+          if (Array.isArray(parsed)) {
+            return parsed.map((t) => `${t}`.toLowerCase().trim());
+          }
+        } catch {
+          // fall through to split
+        }
+        return rawTags
+          .split(/[,;]/)
+          .map((t) => t.trim().toLowerCase())
+          .filter(Boolean);
+      }
+      return [];
+    })();
     const matchesTags =
       selectedTags.size === 0 ||
       animalTags.some((tag) => selectedTags.has(tag));

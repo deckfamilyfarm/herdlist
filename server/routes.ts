@@ -45,6 +45,36 @@ import {
 import { z } from "zod";
 import Papa from "papaparse";
 
+const normalizeDateInput = (value: string) => {
+  const trimmed = (value || "").trim();
+  if (!trimmed) throw new Error("Note date required");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+  const mdY = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (mdY) {
+    const month = parseInt(mdY[1], 10);
+    const day = parseInt(mdY[2], 10);
+    const rawYear = mdY[3];
+    const year = rawYear.length === 2 ? 2000 + parseInt(rawYear, 10) : parseInt(rawYear, 10);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
+      throw new Error("Invalid note date");
+    }
+    return date.toISOString().split("T")[0];
+  }
+
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().split("T")[0];
+  }
+  throw new Error("Invalid note date");
+};
+
 const bulkMoveAnimalsSchema = z.object({
   animalIds: z.array(z.string().min(1)).min(1),
   fieldId: z.string().min(1),
@@ -1248,10 +1278,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (!animal) {
                 throw new Error("Animal not found for tagNumber");
               }
+              const normalizedNoteDate = normalizeDateInput(csvRow.noteDate);
               validNotes.push({
                 animalId: animal.id,
                 note: csvRow.note,
-                noteDate: csvRow.noteDate,
+                noteDate: normalizedNoteDate,
               });
             } catch (error: any) {
               result.failed++;

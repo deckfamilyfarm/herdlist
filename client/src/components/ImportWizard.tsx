@@ -85,7 +85,7 @@ const FORMAT_NOTES: Record<string, string[]> = {
   ],
   notes: [
     "tagNumber: animal tag to attach the note",
-    "noteDate: YYYY-MM-DD",
+    "noteDate: YYYY-MM-DD or MM/DD/YY",
     "note: free text",
     "Additional columns are ignored",
   ],
