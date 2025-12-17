@@ -90,6 +90,25 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     return str.includes("T") ? str.split("T")[0] : str;
   };
 
+  const normalizeTags = (raw: any): string[] => {
+    if (Array.isArray(raw)) return raw.map((t) => `${t}`.toLowerCase().trim()).filter(Boolean);
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.map((t) => `${t}`.toLowerCase().trim()).filter(Boolean);
+        }
+      } catch {
+        /* ignore */
+      }
+      return raw
+        .split(/[,;]/)
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
   const formatPolledStatus = (value: any) => {
     const normalized = (() => {
       if (value === "polled" || value === "horned" || value === "not tested") return value;
@@ -211,6 +230,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
   const age = animal.dateOfBirth ? 
     `${Math.floor((new Date().getTime() - new Date(animal.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years` : 
     'Unknown';
+  const normalizedTags = normalizeTags((animal as any).tags);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -283,6 +303,20 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Horn Status</span>
                     <span className="font-medium">{formatPolledStatus(animal.polled)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">Tags</span>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {normalizedTags.length === 0 ? (
+                        <span className="font-medium">—</span>
+                      ) : (
+                        normalizedTags.map((tag) => (
+                          <Badge key={tag} variant="secondary" className="capitalize">
+                            {tag}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
                   </div>
                   {/* ✅ Status row */}
                   <div className="flex justify-between">
