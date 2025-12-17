@@ -67,6 +67,7 @@ export default function Animals() {
   const [bulkMoveNote, setBulkMoveNote] = useState<string>("");
   const [bulkTags, setBulkTags] = useState<Set<string>>(new Set());
   const [bulkRemoveTags, setBulkRemoveTags] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<"none" | "move" | "addTags" | "removeTags">("none");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef">("all");
@@ -596,192 +597,229 @@ export default function Animals() {
           </Button>
           <span className="text-sm text-muted-foreground">Selected: {selectedIds.size}</span>
         </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <Select value={bulkMoveFieldId} onValueChange={(val) => setBulkMoveFieldId(val)}>
-            <SelectTrigger className="w-48" data-testid="select-bulk-move-field">
-              <SelectValue placeholder="Move to field" />
+        <div className="flex flex-wrap gap-2 items-center justify-end w-full sm:w-auto sm:ml-auto">
+          {bulkAction !== "none" && (
+            <div className="flex flex-wrap gap-2 items-center justify-end w-full sm:w-auto">
+              {bulkAction === "move" && (
+                <>
+                  <Select value={bulkMoveFieldId} onValueChange={(val) => setBulkMoveFieldId(val)}>
+                    <SelectTrigger className="w-48" data-testid="select-bulk-move-field">
+                      <SelectValue placeholder="Move to field" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fields.length === 0 ? (
+                        <SelectItem value="none" disabled>
+                          No fields available
+                        </SelectItem>
+                      ) : (
+                        (() => {
+                          const propertyNameById = new Map<string, string>();
+                          properties.forEach((p) => propertyNameById.set(p.id, p.name));
+
+                          const fieldsByProperty = new Map<string, Field[]>();
+                          fields.forEach((field) => {
+                            const propId = field.propertyId || "unknown";
+                            const arr = fieldsByProperty.get(propId) ?? [];
+                            arr.push(field);
+                            fieldsByProperty.set(propId, arr);
+                          });
+
+                          const sortedPropertyIds = Array.from(fieldsByProperty.keys()).sort((a, b) => {
+                            const nameA = propertyNameById.get(a) ?? "Unknown property";
+                            const nameB = propertyNameById.get(b) ?? "Unknown property";
+                            return nameA.localeCompare(nameB);
+                          });
+
+                          return sortedPropertyIds.map((propId) => {
+                            const propName = propertyNameById.get(propId) ?? "Unknown property";
+                            const sortedFields = (fieldsByProperty.get(propId) ?? []).sort((a, b) =>
+                              a.name.localeCompare(b.name),
+                            );
+                            return (
+                              <div key={propId}>
+                                <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+                                  {propName}
+                                </div>
+                                {sortedFields.map((field) => (
+                                  <SelectItem key={field.id} value={field.id}>
+                                    {field.name}
+                                  </SelectItem>
+                                ))}
+                                <DropdownMenuSeparator />
+                              </div>
+                            );
+                          });
+                        })()
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="date"
+                    value={bulkMoveDate}
+                    onChange={(e) => setBulkMoveDate(e.target.value)}
+                    className="w-40"
+                    max={new Date().toISOString().split("T")[0]}
+                    data-testid="input-bulk-move-date"
+                  />
+                  <Input
+                    placeholder="Optional note"
+                    value={bulkMoveNote}
+                    onChange={(e) => setBulkMoveNote(e.target.value)}
+                    className="w-48"
+                    data-testid="input-bulk-move-note"
+                  />
+                  <Button
+                    onClick={() =>
+                      bulkMoveMutation.mutate({
+                        animalIds: Array.from(selectedIds),
+                        fieldId: bulkMoveFieldId,
+                        movementDate: bulkMoveDate,
+                        note: bulkMoveNote.trim() || undefined,
+                      })
+                    }
+                    disabled={
+                      selectedIds.size === 0 || !bulkMoveFieldId || !bulkMoveDate || bulkMoveMutation.isPending
+                    }
+                    data-testid="button-bulk-move"
+                  >
+                    {bulkMoveMutation.isPending ? "Moving..." : "Move selected"}
+                  </Button>
+                </>
+              )}
+
+              {bulkAction === "addTags" && (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-bulk-tags">
+                        {bulkTags.size === 0
+                          ? "Select tags to add"
+                          : `${bulkTags.size} tag${bulkTags.size > 1 ? "s" : ""} to add`}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+                      <DropdownMenuLabel>Add Tags</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          setBulkTags(new Set());
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Checkbox checked={bulkTags.size === 0} className="pointer-events-none" />
+                        Clear selection
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {animalTagOptions.map((tag) => (
+                        <DropdownMenuItem
+                          key={tag}
+                          onSelect={(e) => {
+                            e.preventDefault();
+                          setBulkTags((prev) => {
+                            const next = new Set(prev);
+                            next.has(tag) ? next.delete(tag) : next.add(tag);
+                            return next;
+                          });
+                        }}
+                        className="flex items-center gap-2"
+                        data-testid={`checkbox-bulk-tag-${tag}`}
+                      >
+                          <Checkbox checked={bulkTags.has(tag)} className="pointer-events-none" />
+                          <span className="capitalize">{tag}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    onClick={() =>
+                      bulkTagsMutation.mutate({
+                        animalIds: Array.from(selectedIds),
+                        tags: Array.from(bulkTags),
+                      })
+                    }
+                    disabled={selectedIds.size === 0 || bulkTags.size === 0 || bulkTagsMutation.isPending}
+                    data-testid="button-bulk-apply-tags"
+                  >
+                    {bulkTagsMutation.isPending ? "Applying..." : "Apply tags"}
+                  </Button>
+                </>
+              )}
+
+              {bulkAction === "removeTags" && (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-bulk-remove-tags">
+                        {bulkRemoveTags.size === 0
+                          ? "Select tags to remove"
+                          : `${bulkRemoveTags.size} tag${bulkRemoveTags.size > 1 ? "s" : ""} to remove`}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+                      <DropdownMenuLabel>Remove Tags</DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          setBulkRemoveTags(new Set());
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Checkbox checked={bulkRemoveTags.size === 0} className="pointer-events-none" />
+                        Clear selection
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {animalTagOptions.map((tag) => (
+                        <DropdownMenuItem
+                          key={tag}
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setBulkRemoveTags((prev) => {
+                              const next = new Set(prev);
+                              next.has(tag) ? next.delete(tag) : next.add(tag);
+                              return next;
+                            });
+                          }}
+                          className="flex items-center gap-2"
+                          data-testid={`checkbox-bulk-remove-tag-${tag}`}
+                        >
+                          <Checkbox checked={bulkRemoveTags.has(tag)} className="pointer-events-none" />
+                          <span className="capitalize">{tag}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    onClick={() =>
+                      bulkRemoveTagsMutation.mutate({
+                        animalIds: Array.from(selectedIds),
+                        tags: Array.from(bulkRemoveTags),
+                      })
+                    }
+                    disabled={
+                      selectedIds.size === 0 ||
+                      bulkRemoveTags.size === 0 ||
+                      bulkRemoveTagsMutation.isPending
+                    }
+                    data-testid="button-bulk-remove-tags"
+                  >
+                    {bulkRemoveTagsMutation.isPending ? "Removing..." : "Remove tags"}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
+          <Select value={bulkAction} onValueChange={(val) => setBulkAction(val as typeof bulkAction)}>
+            <SelectTrigger className="w-44" data-testid="select-bulk-action">
+              <SelectValue placeholder="Choose action" />
             </SelectTrigger>
             <SelectContent>
-              {fields.length === 0 ? (
-                <SelectItem value="none" disabled>
-                  No fields available
-                </SelectItem>
-              ) : (
-                (() => {
-                  const propertyNameById = new Map<string, string>();
-                  properties.forEach((p) => propertyNameById.set(p.id, p.name));
-
-                  const fieldsByProperty = new Map<string, Field[]>();
-                  fields.forEach((field) => {
-                    const propId = field.propertyId || "unknown";
-                    const arr = fieldsByProperty.get(propId) ?? [];
-                    arr.push(field);
-                    fieldsByProperty.set(propId, arr);
-                  });
-
-                  const sortedPropertyIds = Array.from(fieldsByProperty.keys()).sort((a, b) => {
-                    const nameA = propertyNameById.get(a) ?? "Unknown property";
-                    const nameB = propertyNameById.get(b) ?? "Unknown property";
-                    return nameA.localeCompare(nameB);
-                  });
-
-                  return sortedPropertyIds.map((propId) => {
-                    const propName = propertyNameById.get(propId) ?? "Unknown property";
-                    const sortedFields = (fieldsByProperty.get(propId) ?? []).sort((a, b) =>
-                      a.name.localeCompare(b.name),
-                    );
-                    return (
-                      <div key={propId}>
-                        <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">{propName}</div>
-                        {sortedFields.map((field) => (
-                          <SelectItem key={field.id} value={field.id}>
-                            {field.name}
-                          </SelectItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                      </div>
-                    );
-                  });
-                })()
-              )}
+              <SelectItem value="none">Select update option</SelectItem>
+              <SelectItem value="move">Move to field</SelectItem>
+              <SelectItem value="addTags">Add tags</SelectItem>
+              <SelectItem value="removeTags">Remove tags</SelectItem>
             </SelectContent>
           </Select>
-          <Input
-            type="date"
-            value={bulkMoveDate}
-            onChange={(e) => setBulkMoveDate(e.target.value)}
-            className="w-40"
-            max={new Date().toISOString().split("T")[0]}
-            data-testid="input-bulk-move-date"
-          />
-          <Input
-            placeholder="Optional note"
-            value={bulkMoveNote}
-            onChange={(e) => setBulkMoveNote(e.target.value)}
-            className="w-48"
-            data-testid="input-bulk-move-note"
-          />
-          <Button
-            onClick={() =>
-              bulkMoveMutation.mutate({
-                animalIds: Array.from(selectedIds),
-                fieldId: bulkMoveFieldId,
-                movementDate: bulkMoveDate,
-                note: bulkMoveNote.trim() || undefined,
-              })
-            }
-            disabled={selectedIds.size === 0 || !bulkMoveFieldId || !bulkMoveDate || bulkMoveMutation.isPending}
-            data-testid="button-bulk-move"
-          >
-            {bulkMoveMutation.isPending ? "Moving..." : "Move selected"}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-bulk-tags">
-                {bulkTags.size === 0
-                  ? "Select tags to add"
-                  : `${bulkTags.size} tag${bulkTags.size > 1 ? "s" : ""} to add`}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
-              <DropdownMenuLabel>Add Tags</DropdownMenuLabel>
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setBulkTags(new Set());
-                }}
-                className="flex items-center gap-2"
-              >
-                <Checkbox checked={bulkTags.size === 0} className="pointer-events-none" />
-                Clear selection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {animalTagOptions.map((tag) => (
-                <DropdownMenuItem
-                  key={tag}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setBulkTags((prev) => {
-                      const next = new Set(prev);
-                      next.has(tag) ? next.delete(tag) : next.add(tag);
-                      return next;
-                    });
-                  }}
-                  className="flex items-center gap-2"
-                  data-testid={`checkbox-bulk-tag-${tag}`}
-                >
-                  <Checkbox checked={bulkTags.has(tag)} className="pointer-events-none" />
-                  <span className="capitalize">{tag}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            onClick={() =>
-              bulkTagsMutation.mutate({
-                animalIds: Array.from(selectedIds),
-                tags: Array.from(bulkTags),
-              })
-            }
-            disabled={selectedIds.size === 0 || bulkTags.size === 0 || bulkTagsMutation.isPending}
-            data-testid="button-bulk-apply-tags"
-          >
-            {bulkTagsMutation.isPending ? "Applying..." : "Apply tags"}
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-bulk-remove-tags">
-                {bulkRemoveTags.size === 0
-                  ? "Select tags to remove"
-                  : `${bulkRemoveTags.size} tag${bulkRemoveTags.size > 1 ? "s" : ""} to remove`}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
-              <DropdownMenuLabel>Remove Tags</DropdownMenuLabel>
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setBulkRemoveTags(new Set());
-                }}
-                className="flex items-center gap-2"
-              >
-                <Checkbox checked={bulkRemoveTags.size === 0} className="pointer-events-none" />
-                Clear selection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {animalTagOptions.map((tag) => (
-                <DropdownMenuItem
-                  key={tag}
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setBulkRemoveTags((prev) => {
-                      const next = new Set(prev);
-                      next.has(tag) ? next.delete(tag) : next.add(tag);
-                      return next;
-                    });
-                  }}
-                  className="flex items-center gap-2"
-                  data-testid={`checkbox-bulk-remove-tag-${tag}`}
-                >
-                  <Checkbox checked={bulkRemoveTags.has(tag)} className="pointer-events-none" />
-                  <span className="capitalize">{tag}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            onClick={() =>
-              bulkRemoveTagsMutation.mutate({
-                animalIds: Array.from(selectedIds),
-                tags: Array.from(bulkRemoveTags),
-              })
-            }
-            disabled={selectedIds.size === 0 || bulkRemoveTags.size === 0 || bulkRemoveTagsMutation.isPending}
-            data-testid="button-bulk-remove-tags"
-          >
-            {bulkRemoveTagsMutation.isPending ? "Removing..." : "Remove tags"}
-          </Button>
         </div>
       </div>
 
