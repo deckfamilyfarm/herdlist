@@ -24,6 +24,12 @@ interface PropertyCount {
   beef: number;
 }
 
+interface LatestNote {
+  animalId: string;
+  note: string;
+  noteDate: string;
+}
+
 export default function Reports() {
   // ---- Load real data ----
   const { data: animals = [], isLoading: animalsLoading } = useQuery<Animal[]>({
@@ -38,7 +44,11 @@ export default function Reports() {
     queryKey: ["/api/properties"],
   });
 
-  const isAnyLoading = animalsLoading || fieldsLoading || propertiesLoading;
+  const { data: latestNotes = [], isLoading: notesLoading } = useQuery<LatestNote[]>({
+    queryKey: ["/api/notes/latest"],
+  });
+
+  const isAnyLoading = animalsLoading || fieldsLoading || propertiesLoading || notesLoading;
 
   // ---- Filter state ----
   const [asOfDate, setAsOfDate] = useState<string>("");
@@ -253,30 +263,155 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
       a.tagNumber.localeCompare(b.tagNumber),
     );
 
-    const rows = sortedAnimals
-      .map((animal) => {
-        const dob = (animal.dateOfBirth as any as string) || "";
-        const ageLabel = formatAge(dob || null);
+    const asOfDateValue = asOfDate ? new Date(asOfDate) : new Date();
+    const baseYear = isNaN(asOfDateValue.getTime())
+      ? new Date().getFullYear()
+      : asOfDateValue.getFullYear();
+    const currentYear = baseYear;
+    const lastYear = baseYear - 1;
+
+    const animalById = new Map(animals.map((animal) => [animal.id, animal]));
+    const noteByAnimalId = new Map(latestNotes.map((note) => [note.animalId, note.note]));
+    const offspringTags = new Map<string, { current: Set<string>; last: Set<string> }>();
+
+    animals.forEach((calf) => {
+      const dob = (calf.dateOfBirth as any as string) || "";
+      if (!dob || !calf.tagNumber) return;
+      const year = new Date(dob).getFullYear();
+      const isCurrent = year === currentYear;
+      const isLast = year === lastYear;
+      if (!isCurrent && !isLast) return;
+
+      const bump = (parentId?: string | null) => {
+        if (!parentId) return;
+        const entry = offspringTags.get(parentId) || {
+          current: new Set<string>(),
+          last: new Set<string>(),
+        };
+        if (isCurrent) entry.current.add(calf.tagNumber);
+        if (isLast) entry.last.add(calf.tagNumber);
+        offspringTags.set(parentId, entry);
+      };
+
+      bump(calf.damId as string | null);
+      bump(calf.sireId as string | null);
+    });
+
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+    const formatDob = (dob?: string | Date | null) => {
+      if (!dob) return "";
+      const raw = dob as any as string;
+      return raw ? raw.split("T")[0] : "";
+    };
+
+    const grouped = new Map<string, Animal[]>();
+    sortedAnimals.forEach((animal) => {
+      const key = (animal as any).currentFieldId || animal.currentFieldId || NO_LOCATION_ID;
+      if (!grouped.has(key as string)) grouped.set(key as string, []);
+      grouped.get(key as string)!.push(animal);
+    });
+
+    const groupEntries = Array.from(grouped.entries())
+      .map(([fieldId, animalsInField]) => {
+        const field = fieldById.get(fieldId);
+        const property = field ? propertyById.get(field.propertyId as string) : undefined;
+        return {
+          fieldId,
+          fieldName: field?.name || "No location",
+          propertyName: property?.name || "",
+          animals: [...animalsInField].sort((a, b) => a.tagNumber.localeCompare(b.tagNumber)),
+        };
+      })
+      .sort((a, b) => {
+        if (a.fieldId === NO_LOCATION_ID) return 1;
+        if (b.fieldId === NO_LOCATION_ID) return -1;
+        if (a.propertyName !== b.propertyName) return a.propertyName.localeCompare(b.propertyName);
+        return a.fieldName.localeCompare(b.fieldName);
+      });
+
+    const sectionsHtml = groupEntries
+      .map((group, index) => {
+        const rows = group.animals
+          .map((animal) => {
+            const dob = (animal.dateOfBirth as any as string) || "";
+            const { months } = ageFromDob(dob || null);
+            const damTag = animal.damId ? animalById.get(animal.damId)?.tagNumber : "";
+            const sireTag = animal.sireId ? animalById.get(animal.sireId)?.tagNumber : "";
+            const tags = offspringTags.get(animal.id);
+            const thisYearTags = tags ? Array.from(tags.current).sort().join(", ") : "";
+            const lastYearTags = tags ? Array.from(tags.last).sort().join(", ") : "";
+            const noteText = noteByAnimalId.get(animal.id) || "";
+            const damSire = [damTag, sireTag].filter(Boolean).join(" / ");
+            return `
+              <tr>
+                <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${escapeHtml(animal.tagNumber)}</td>
+                <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${escapeHtml(animal.phenotype || "")}</td>
+                <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${escapeHtml(animal.sex || "")}</td>
+                <td class="wrap-cell" style="border:1px solid #ccc;padding:2px;">${escapeHtml(noteText)}</td>
+                <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${formatDob(dob)}</td>
+                <td class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;">${months || ""}</td>
+                <td class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;">${animal.organic ? "OTCO" : "Natural"}</td>
+                <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${escapeHtml(damSire)}</td>
+                <td class="wrap-cell" style="border:1px solid #ccc;padding:2px;">${escapeHtml(thisYearTags)}</td>
+                <td class="wrap-cell" style="border:1px solid #ccc;padding:2px;">${escapeHtml(lastYearTags)}</td>
+              </tr>
+            `;
+          })
+          .join("");
+
+        const heading = group.propertyName
+          ? `${escapeHtml(group.propertyName)} / ${escapeHtml(group.fieldName)}`
+          : escapeHtml(group.fieldName);
+        const pageBreak = index === groupEntries.length - 1 ? "auto" : "always";
+
         return `
-          <tr>
-            <td style="border:1px solid #ccc;padding:4px;width:120px;"></td>
-            <td style="border:1px solid #ccc;padding:4px;">${animal.tagNumber}</td>
-            <td style="border:1px solid #ccc;padding:4px;">${animal.phenotype || ""}</td>
-            <td style="border:1px solid #ccc;padding:4px;">${animal.type}</td>
-            <td style="border:1px solid #ccc;padding:4px;">${dob ? dob.split("T")[0] : ""}</td>
-            <td style="border:1px solid #ccc;padding:4px;text-align:center;">${ageLabel}</td>
-            <td style="border:1px solid #ccc;padding:4px;text-align:center;">${animal.organic ? "OTCO" : "Natural"}</td>
-          </tr>
+          <div class="field-section" style="page-break-after:${pageBreak};">
+            <h3 style="margin:0 0 6px 0;">${heading}</h3>
+            <div style="margin-bottom:8px;font-size:12px;">
+              <strong>Animals in field:</strong> ${group.animals.length}
+            </div>
+            <table style="border-collapse: collapse; width: 100%; font-size: 10px; line-height: 1.05; table-layout: fixed;">
+              <thead>
+                <tr>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:8%;">Tag Number</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:12%;">Phenotype</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:6%;">Sex</th>
+                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:26%;">Notes</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:8%;">DOB</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;width:6%;">Age (Months)</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;width:6%;">Organic</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:10%;">Dam / Sire</th>
+                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:9%;">This Year Calf</th>
+                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:9%;">Last Year Calf</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </div>
         `;
       })
       .join("");
 
     const filtersHtml = `
-      <div style="margin-bottom:8px;font-size:12px;">
-        <div><strong>As of:</strong> ${filterSummary.asOfLabel}</div>
-        <div><strong>Type:</strong> ${filterSummary.typeLabel}</div>
-        <div><strong>Status:</strong> ${filterSummary.statusLabel}</div>
-        <div><strong>Fields:</strong> ${filterSummary.fieldsLabel}</div>
+      <div style="margin-bottom:6px;font-size:11px;">
+        <strong>Animals in report:</strong> ${sortedAnimals.length}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>As of:</strong> ${filterSummary.asOfLabel}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>Type:</strong> ${filterSummary.typeLabel}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>Status:</strong> ${filterSummary.statusLabel}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>Fields:</strong> ${filterSummary.fieldsLabel}
       </div>
     `;
 
@@ -284,28 +419,20 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
       <html>
         <head>
           <title>Herd Report</title>
-          <style>body, table { font-family: "Roboto", sans-serif; }</style>
+          <style>
+            @page { size: landscape; margin: 6mm; }
+            body, table { font-family: "Roboto", sans-serif; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; }
+            th, td { vertical-align: top; }
+            .nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .wrap-cell { white-space: normal; word-break: break-word; }
+          </style>
         </head>
-        <body style="padding: 16px;">
+        <body style="padding: 8px; line-height: 1.05;">
           <h2>Herd Report</h2>
-          <div style="margin-bottom:8px;font-size:12px;"><strong>Animals in report:</strong> ${sortedAnimals.length}</div>
           ${filtersHtml}
-          <table style="border-collapse: collapse; width: 100%; font-size: 12px;">
-            <thead>
-              <tr>
-                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Notes</th>
-                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Tag Number</th>
-                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Phenotype</th>
-                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Type</th>
-                <th style="border:1px solid #ccc;padding:4px;text-align:left;">Date of Birth</th>
-                <th style="border:1px solid #ccc;padding:4px;text-align:center;">Age</th>
-                <th style="border:1px solid #ccc;padding:4px;text-align:center;">Organic</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
+          ${sectionsHtml}
           <script>window.print();</script>
         </body>
       </html>

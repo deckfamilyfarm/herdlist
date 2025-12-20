@@ -324,6 +324,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Notes routes
+  app.get("/api/notes/latest", isAdmin, async (req, res) => {
+    try {
+      const latestNotes = await storage.getLatestNotesByAnimal();
+      res.json(latestNotes);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/notes/animal/:id", isAdmin, async (req, res) => {
     try {
       const notes = await storage.getNotesByAnimalId(req.params.id);

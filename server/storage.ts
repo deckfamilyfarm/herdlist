@@ -123,6 +123,7 @@ export interface IStorage {
   createNote(note: InsertNote): Promise<Note>;
   bulkCreateNotes(notes: InsertNote[]): Promise<Note[]>;
   getNotesByAnimalId(animalId: string): Promise<Note[]>;
+  getLatestNotesByAnimal(): Promise<{ animalId: string; note: string; noteDate: string }[]>;
   updateNote(id: string, note: Partial<InsertNote>): Promise<Note | undefined>;
   deleteNote(id: string): Promise<void>;
 
@@ -681,6 +682,33 @@ export class DatabaseStorage implements IStorage {
       .from(notes)
       .where(eq(notes.animalId, animalId))
       .orderBy(desc(notes.noteDate), desc(notes.createdAt));
+  }
+
+  async getLatestNotesByAnimal(): Promise<
+    { animalId: string; note: string; noteDate: string }[]
+  > {
+    const result = await db
+      .select({
+        animalId: notes.animalId,
+        note: notes.note,
+        noteDate: notes.noteDate,
+        createdAt: notes.createdAt,
+      })
+      .from(notes)
+      .orderBy(desc(notes.noteDate), desc(notes.createdAt));
+
+    const latest = new Map<string, { animalId: string; note: string; noteDate: string }>();
+    for (const row of result) {
+      if (!latest.has(row.animalId)) {
+        latest.set(row.animalId, {
+          animalId: row.animalId,
+          note: row.note,
+          noteDate: row.noteDate as any as string,
+        });
+      }
+    }
+
+    return Array.from(latest.values());
   }
 
   async updateNote(id: string, note: Partial<InsertNote>): Promise<Note | undefined> {
