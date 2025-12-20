@@ -17,8 +17,10 @@ interface DashboardStats {
   animalsBySex: Record<string, number>;
 }
 
-interface PropertyCount {
+interface FieldCount {
   property: string;
+  field: string;
+  fieldId: string;
   dairy: number;
   beef: number;
 }
@@ -39,7 +41,7 @@ export default function Dashboard() {
     queryKey: ['/api/dashboard/stats'],
   });
 
-  const { data: propertyCountsData } = useQuery<PropertyCount[]>({
+  const { data: fieldCountsData } = useQuery<FieldCount[]>({
     queryKey: ['/api/dashboard/property-counts'],
   });
 
@@ -52,6 +54,12 @@ export default function Dashboard() {
   });
 
   const displayAnimals = recentAnimals.slice(0, 5);
+  const sortedFieldCounts = [...(fieldCountsData || [])].sort((a, b) => {
+    if (a.property !== b.property) {
+      return a.property.localeCompare(b.property);
+    }
+    return a.field.localeCompare(b.field);
+  });
 
   if (statsLoading || animalsLoading) {
     return (
@@ -105,7 +113,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <HerdCompositionChart data={propertyCountsData || []} />
+          <HerdCompositionChart data={sortedFieldCounts} />
         </div>
         <MovementHistoryTimeline movements={recentMovements} />
       </div>

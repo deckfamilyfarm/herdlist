@@ -154,6 +154,16 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
     );
   }, [filteredAnimals, fieldById, propertyById]);
 
+  const propertyChartData = useMemo(
+    () =>
+      propertyCounts.map((count) => ({
+        ...count,
+        field: count.property,
+        fieldId: count.propertyId ?? count.property,
+      })),
+    [propertyCounts],
+  );
+
   const filterSummary = useMemo(() => {
     const typeLabel =
       animalType === "all" ? "All" : animalType.charAt(0).toUpperCase() + animalType.slice(1);
@@ -350,7 +360,11 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
       </Card>
 
       {/* Chart uses filtered per-property counts */}
-      <HerdCompositionChart data={propertyCounts} />
+      <HerdCompositionChart
+        data={propertyChartData}
+        title="Number of Animals by Property"
+        showPropertyLabel={false}
+      />
 
       {/* Herd summary */}
       <Card>

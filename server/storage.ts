@@ -94,7 +94,13 @@ export interface IStorage {
   getFieldsByPropertyId(propertyId: string): Promise<Field[]>;
   updateField(id: string, field: Partial<InsertField>): Promise<Field | undefined>;
   deleteField(id: string): Promise<void>;
-  getCurrentAnimalCountByField(): Promise<{ property: string; dairy: number; beef: number }[]>;
+  getCurrentAnimalCountByField(): Promise<{
+    property: string;
+    field: string;
+    fieldId: string;
+    dairy: number;
+    beef: number;
+  }[]>;
 
   // Movements
   createMovement(movement: InsertMovement): Promise<Movement>;
@@ -400,17 +406,26 @@ export class DatabaseStorage implements IStorage {
     await db.delete(fields).where(eq(fields.id, id));
   }
 
-  async getCurrentAnimalCountByField(): Promise<{ property: string; dairy: number; beef: number }[]> {
+  async getCurrentAnimalCountByField(): Promise<{
+    property: string;
+    field: string;
+    fieldId: string;
+    dairy: number;
+    beef: number;
+  }[]> {
     const result = await db
       .select({
         property: properties.name,
-        dairy: sql<number>`count(case when ${animals.type} = 'dairy' and ${animals.status} = 'active' then 1 end)`,
-        beef: sql<number>`count(case when ${animals.type} = 'beef' and ${animals.status} = 'active' then 1 end)`,
+        field: fields.name,
+        fieldId: fields.id,
+        dairy: sql<number>`count(case when ${animals.type} = 'dairy' then 1 end)`,
+        beef: sql<number>`count(case when ${animals.type} = 'beef' then 1 end)`,
       })
-      .from(properties)
-      .leftJoin(fields, eq(properties.id, fields.propertyId))
-      .leftJoin(animals, eq(fields.id, animals.currentFieldId))
-      .groupBy(properties.id, properties.name);
+      .from(fields)
+      .innerJoin(properties, eq(fields.propertyId, properties.id))
+      .innerJoin(animals, eq(fields.id, animals.currentFieldId))
+      .where(sql`(${animals.status} = 'active' or ${animals.status} is null)`)
+      .groupBy(fields.id, fields.name, properties.id, properties.name);
 
     return result;
   }
@@ -470,10 +485,12 @@ export class DatabaseStorage implements IStorage {
         toFieldId: movements.toFieldId,
         movementDate: movements.movementDate,
         notes: movements.notes,
+        tagNumber: animals.tagNumber,
         fromFieldName: fromFields.name,
         toFieldName: toFields.name,
       })
       .from(movements)
+      .leftJoin(animals, eq(movements.animalId, animals.id))
       .leftJoin(fromFields, eq(movements.fromFieldId, fromFields.id))
       .leftJoin(toFields, eq(movements.toFieldId, toFields.id))
       .orderBy(desc(movements.movementDate))

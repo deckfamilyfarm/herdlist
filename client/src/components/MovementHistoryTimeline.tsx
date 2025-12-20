@@ -9,6 +9,7 @@ interface MovementHistoryTimelineProps {
 type EnrichedMovement = Movement & {
   fromFieldName?: string | null;
   toFieldName?: string | null;
+  tagNumber?: string | null;
 };
 
 export function MovementHistoryTimeline({ movements }: MovementHistoryTimelineProps) {
@@ -36,6 +37,9 @@ export function MovementHistoryTimeline({ movements }: MovementHistoryTimelinePr
                     <MoveRight className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="font-medium">{movement.toFieldName || "Unknown"}</span>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {movement.tagNumber ? `Tag ${movement.tagNumber}` : "Tag unknown"}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(movement.movementDate).toLocaleDateString()}
                   </p>
