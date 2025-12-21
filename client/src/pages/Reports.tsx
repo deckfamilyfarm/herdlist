@@ -369,15 +369,12 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
         const heading = group.propertyName
           ? `${escapeHtml(group.propertyName)} / ${escapeHtml(group.fieldName)}`
           : escapeHtml(group.fieldName);
-        const pageBreak = index === groupEntries.length - 1 ? "auto" : "always";
-
         return `
-          <div class="field-section" style="page-break-after:${pageBreak};">
-            <h3 style="margin:0 0 6px 0;">${heading}</h3>
-            <div style="margin-bottom:8px;font-size:12px;">
-              <strong>Animals in field:</strong> ${group.animals.length}
-            </div>
-            <table style="border-collapse: collapse; width: 100%; font-size: 10px; line-height: 1.05; table-layout: fixed;">
+          <div class="field-section" style="page-break-inside: avoid; break-inside: avoid-page; page-break-after: auto;">
+            <h3 style="margin:0 0 6px 0;">
+              ${heading} <span style="font-weight:normal;">(Animals in field: ${group.animals.length})</span>
+            </h3>
+            <table style="border-collapse: collapse; width: 100%; font-size: 10px; line-height: 1.05; table-layout: fixed; margin-top:6px; margin-bottom:12px;">
               <thead>
                 <tr>
                   <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:8%;">Tag Number</th>
@@ -388,8 +385,8 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
                   <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;width:6%;">Age (Months)</th>
                   <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;width:6%;">Organic</th>
                   <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:10%;">Dam / Sire</th>
-                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:9%;">This Year Calf</th>
-                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:9%;">Last Year Calf</th>
+                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:9%;">${currentYear} Calf</th>
+                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:9%;">${lastYear} Calf</th>
                 </tr>
               </thead>
               <tbody>
