@@ -70,7 +70,7 @@ export default function Animals() {
   const [bulkAction, setBulkAction] = useState<"none" | "move" | "addTags" | "removeTags">("none");
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "dairy" | "beef" | "ai">("all");
   const [sexFilter, setSexFilter] = useState<"all" | "cow" | "bull" | "steer" | "stag" | "freemartin">("all");
   const [polledFilter, setPolledFilter] = useState<PolledFilter>("all");
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
@@ -247,8 +247,9 @@ export default function Animals() {
       animal.tagNumber.toLowerCase().includes(searchLower) ||
       (animal.phenotype ?? "").toLowerCase().includes(searchLower);
 
-    // Type filter (dairy / beef / all)
-    const matchesType = typeFilter === "all" || animal.type === typeFilter;
+    // Type filter
+    const animalType = String(animal.type ?? "").trim().toLowerCase();
+    const matchesType = typeFilter === "all" || animalType === typeFilter;
 
     // Sex filter
     const normalizedSex = (() => {
@@ -474,7 +475,7 @@ export default function Animals() {
         {/* Type filter */}
         <Select
           value={typeFilter}
-          onValueChange={(val: "all" | "dairy" | "beef") => setTypeFilter(val)}
+          onValueChange={(val: "all" | "dairy" | "beef" | "ai") => setTypeFilter(val)}
         >
           <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-type">
             <SelectValue placeholder="Type" />
@@ -483,6 +484,7 @@ export default function Animals() {
             <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="dairy">Dairy</SelectItem>
             <SelectItem value="beef">Beef</SelectItem>
+            <SelectItem value="ai">AI</SelectItem>
           </SelectContent>
         </Select>
 

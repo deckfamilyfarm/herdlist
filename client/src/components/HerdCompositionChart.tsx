@@ -7,6 +7,7 @@ interface FieldCount {
   fieldId: string;
   dairy: number;
   beef: number;
+  ai: number;
 }
 
 interface HerdCompositionChartProps {
@@ -78,6 +79,7 @@ export function HerdCompositionChart({
             <Legend verticalAlign="top" align="right" />
             <Bar dataKey="dairy" fill="hsl(var(--chart-1))" name="Dairy" stackId="total" />
             <Bar dataKey="beef" fill="hsl(var(--chart-3))" name="Beef" stackId="total" />
+            <Bar dataKey="ai" fill="hsl(var(--chart-4))" name="AI" stackId="total" />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

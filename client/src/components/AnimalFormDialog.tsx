@@ -259,6 +259,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               <SelectContent>
                 <SelectItem value="dairy">Dairy</SelectItem>
                 <SelectItem value="beef">Beef</SelectItem>
+                <SelectItem value="ai">AI</SelectItem>
               </SelectContent>
             </Select>
           </div>

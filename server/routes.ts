@@ -716,6 +716,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/movements", isAdmin, async (_req, res) => {
+    try {
+      const movements = await storage.getAllMovements();
+      res.json(movements);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/movements/animal/:animalId", isAdmin, async (req, res) => {
     try {
       const movements = await storage.getMovementsByAnimalId(req.params.animalId);
@@ -949,7 +958,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalAnimals: activeAnimals.length,
         cowsReadyToBreed: activeReadyToBreed.length,
         animalsByType: activeAnimals.reduce((acc, animal) => {
-          acc[animal.type] = (acc[animal.type] || 0) + 1;
+          const normalizedType = String(animal.type ?? "").trim().toLowerCase();
+          if (!normalizedType) return acc;
+          acc[normalizedType] = (acc[normalizedType] || 0) + 1;
           return acc;
         }, {} as Record<string, number>),
         animalsBySex: activeAnimals.reduce((acc, animal) => {

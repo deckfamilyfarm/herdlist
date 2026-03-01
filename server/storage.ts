@@ -100,10 +100,12 @@ export interface IStorage {
     fieldId: string;
     dairy: number;
     beef: number;
+    ai: number;
   }[]>;
 
   // Movements
   createMovement(movement: InsertMovement): Promise<Movement>;
+  getAllMovements(): Promise<Movement[]>;
   getMovementsByAnimalId(animalId: string): Promise<Movement[]>;
   getRecentMovements(limit?: number): Promise<Movement[]>;
 
@@ -413,6 +415,7 @@ export class DatabaseStorage implements IStorage {
     fieldId: string;
     dairy: number;
     beef: number;
+    ai: number;
   }[]> {
     const result = await db
       .select({
@@ -421,6 +424,7 @@ export class DatabaseStorage implements IStorage {
         fieldId: fields.id,
         dairy: sql<number>`count(case when ${animals.type} = 'dairy' then 1 end)`,
         beef: sql<number>`count(case when ${animals.type} = 'beef' then 1 end)`,
+        ai: sql<number>`count(case when ${animals.type} = 'ai' then 1 end)`,
       })
       .from(fields)
       .innerJoin(properties, eq(fields.propertyId, properties.id))
@@ -446,6 +450,10 @@ export class DatabaseStorage implements IStorage {
 
     const [created] = await db.select().from(movements).where(eq(movements.id, id));
     return created as Movement;
+  }
+
+  async getAllMovements(): Promise<Movement[]> {
+    return await db.select().from(movements).orderBy(movements.movementDate);
   }
 
   async getMovementsByAnimalId(animalId: string): Promise<Movement[]> {

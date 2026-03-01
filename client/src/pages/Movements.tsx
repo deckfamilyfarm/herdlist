@@ -21,6 +21,10 @@ import type { Animal, Field, InsertMovement, Movement } from "@shared/schema";
 
 export default function Movements() {
   const { toast } = useToast();
+  const formatTypeLabel = (type: string) => {
+    const normalizedType = type.trim().toLowerCase();
+    return normalizedType === "ai" ? "AI" : type;
+  };
   const [formData, setFormData] = useState({
     selectionType: '',
     fromFieldId: '',
@@ -92,14 +96,21 @@ export default function Movements() {
       // Move all dairy animals from source field
       if (formData.fromFieldId) {
         animalsToMove = animals
-          .filter(a => a.currentFieldId === formData.fromFieldId && a.type === 'dairy')
+          .filter(a => a.currentFieldId === formData.fromFieldId && String(a.type ?? '').trim().toLowerCase() === 'dairy')
           .map(a => a.id);
       }
     } else if (formData.selectionType === 'all-beef') {
       // Move all beef animals from source field
       if (formData.fromFieldId) {
         animalsToMove = animals
-          .filter(a => a.currentFieldId === formData.fromFieldId && a.type === 'beef')
+          .filter(a => a.currentFieldId === formData.fromFieldId && String(a.type ?? '').trim().toLowerCase() === 'beef')
+          .map(a => a.id);
+      }
+    } else if (formData.selectionType === 'all-ai') {
+      // Move all AI animals from source field
+      if (formData.fromFieldId) {
+        animalsToMove = animals
+          .filter(a => a.currentFieldId === formData.fromFieldId && String(a.type ?? '').trim().toLowerCase() === 'ai')
           .map(a => a.id);
       }
     }
@@ -153,6 +164,7 @@ export default function Movements() {
                       <SelectItem value="whole-herd">Whole Herd (All Animals in From Field)</SelectItem>
                       <SelectItem value="all-dairy">All Dairy (in From Field)</SelectItem>
                       <SelectItem value="all-beef">All Beef (in From Field)</SelectItem>
+                      <SelectItem value="all-ai">All AI (in From Field)</SelectItem>
                       <SelectItem value="individual">Select Individual Animals</SelectItem>
                     </SelectContent>
                   </Select>
@@ -174,19 +186,23 @@ export default function Movements() {
                       {animals
                         .filter(a => {
                           if (!a.currentFieldId || a.currentFieldId !== formData.fromFieldId) return false;
-                          if (formData.selectionType === 'all-dairy') return a.type === 'dairy';
-                          if (formData.selectionType === 'all-beef') return a.type === 'beef';
+                          const animalType = String(a.type ?? '').trim().toLowerCase();
+                          if (formData.selectionType === 'all-dairy') return animalType === 'dairy';
+                          if (formData.selectionType === 'all-beef') return animalType === 'beef';
+                          if (formData.selectionType === 'all-ai') return animalType === 'ai';
                           return true; // whole-herd
                         })
                         .map(a => (
                           <span key={a.id} className="px-2 py-1 bg-background border rounded text-xs">
-                            {a.tagNumber} ({a.type})
+                            {a.tagNumber} ({formatTypeLabel(a.type)})
                           </span>
                         ))}
                       {animals.filter(a => {
                         if (!a.currentFieldId || a.currentFieldId !== formData.fromFieldId) return false;
-                        if (formData.selectionType === 'all-dairy') return a.type === 'dairy';
-                        if (formData.selectionType === 'all-beef') return a.type === 'beef';
+                        const animalType = String(a.type ?? '').trim().toLowerCase();
+                        if (formData.selectionType === 'all-dairy') return animalType === 'dairy';
+                        if (formData.selectionType === 'all-beef') return animalType === 'beef';
+                        if (formData.selectionType === 'all-ai') return animalType === 'ai';
                         return true;
                       }).length === 0 && (
                         <span className="text-sm text-muted-foreground">No animals match the selected criteria</span>

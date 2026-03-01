@@ -2,7 +2,7 @@ import { HerdStatCard } from "@/components/HerdStatCard";
 import { MovementHistoryTimeline } from "@/components/MovementHistoryTimeline";
 import { HerdCompositionChart } from "@/components/HerdCompositionChart";
 import { AnimalTable } from "@/components/AnimalTable";
-import { Beef, Milk, TrendingUp, Activity, Heart } from "lucide-react";
+import { Beef, Milk, TrendingUp, Activity, Heart, Cpu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useState } from "react";
@@ -23,6 +23,7 @@ interface FieldCount {
   fieldId: string;
   dairy: number;
   beef: number;
+  ai: number;
 }
 
 interface Movement {
@@ -53,7 +54,11 @@ export default function Dashboard() {
     queryKey: ['/api/movements/recent'],
   });
 
-  const displayAnimals = recentAnimals.slice(0, 5);
+  const activeRecentAnimals = recentAnimals.filter((animal) => {
+    const normalizedStatus = String(animal.status ?? "active").trim().toLowerCase();
+    return normalizedStatus === "" || normalizedStatus === "active";
+  });
+  const displayAnimals = activeRecentAnimals.slice(0, 5);
   const sortedFieldCounts = [...(fieldCountsData || [])].sort((a, b) => {
     if (a.property !== b.property) {
       return a.property.localeCompare(b.property);
@@ -82,7 +87,7 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <HerdStatCard
           title="Total Animals"
           value={stats?.totalAnimals || 0}
@@ -97,6 +102,11 @@ export default function Dashboard() {
           title="Beef Cattle"
           value={stats?.animalsByType?.beef || 0}
           icon={Beef}
+        />
+        <HerdStatCard
+          title="AI"
+          value={stats?.animalsByType?.ai || 0}
+          icon={Cpu}
         />
         <HerdStatCard
           title="Cows Ready to Breed"

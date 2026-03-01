@@ -54,8 +54,16 @@ export function AnimalTable({
   selectedIds,
   onToggleSelect,
 }: AnimalTableProps) {
+  const formatTypeLabel = (type: string) => {
+    const normalizedType = type.trim().toLowerCase();
+    return normalizedType === "ai" ? "AI" : type;
+  };
   const getTypeColor = (type: string) => {
-    return type === "dairy" ? "bg-chart-1 text-primary-foreground" : "bg-chart-3 text-primary-foreground";
+    const normalizedType = type.trim().toLowerCase();
+    if (normalizedType === "dairy") return "bg-chart-1 text-primary-foreground";
+    if (normalizedType === "beef") return "bg-chart-3 text-primary-foreground";
+    if (normalizedType === "ai") return "bg-chart-4 text-primary-foreground";
+    return "bg-muted text-foreground";
   };
 
   const formatDate = (value: Animal["dateOfBirth"]) => {
@@ -191,7 +199,7 @@ export function AnimalTable({
                 <TableCell>{animal.phenotype || "-"}</TableCell>
               <TableCell>
                 <Badge className={getTypeColor(animal.type)} data-testid={`badge-type-${animal.id}`}>
-                  {animal.type}
+                  {formatTypeLabel(animal.type)}
                 </Badge>
               </TableCell>
               <TableCell className="capitalize">{animal.sex}</TableCell>

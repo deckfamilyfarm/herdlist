@@ -22,7 +22,7 @@ import { FileDown } from "lucide-react";
 import type { AnimalStatus, Field, Property } from "@shared/schema";
 import { animalStatusEnum } from "@shared/schema";
 
-export type AnimalTypeFilter = "all" | "dairy" | "beef";
+export type AnimalTypeFilter = "all" | "dairy" | "beef" | "ai";
 export type StatusFilter = "all" | AnimalStatus;
 
 interface ReportFiltersProps {
@@ -138,6 +138,7 @@ export function ReportFilters({
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="dairy">Dairy</SelectItem>
                 <SelectItem value="beef">Beef</SelectItem>
+                <SelectItem value="ai">AI</SelectItem>
               </SelectContent>
             </Select>
           </div>

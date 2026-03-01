@@ -4,6 +4,15 @@ import { useQuery } from "@tanstack/react-query";
 import { ReportFilters } from "@/components/ReportFilters";
 import { HerdCompositionChart } from "@/components/HerdCompositionChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -14,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
-import type { Animal, Field, Property, AnimalStatus } from "@shared/schema";
+import type { Animal, Field, Property, AnimalStatus, Movement, SlaughterRecord } from "@shared/schema";
 import type { AnimalTypeFilter, StatusFilter } from "@/components/ReportFilters";
 
 interface PropertyCount {
@@ -22,6 +31,7 @@ interface PropertyCount {
   propertyId?: string;
   dairy: number;
   beef: number;
+  ai: number;
 }
 
 interface LatestNote {
@@ -29,6 +39,72 @@ interface LatestNote {
   note: string;
   noteDate: string;
 }
+
+type GrazingTypeFilter = "all_dairy_beef" | "dairy" | "beef";
+
+interface GrazingMonthRow {
+  monthKey: string;
+  monthLabel: string;
+  eligibleHeadDays: number;
+  grazingHeadDays: number;
+  grazingDaysPerHeadDay: number;
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const NO_LOCATION_ID = "__NO_LOCATION__";
+const defaultGrazingFilters = {
+  excludeWet: true,
+  excludeMissingDob: false,
+  excludeUnderSixMonths: true,
+  backfillUnknownPastures: true,
+  treatUnknownPastureAsGrazing: true,
+} as const;
+
+const toUtcDay = (value?: string | Date | null): Date | null => {
+  if (!value) return null;
+
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, day));
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
+};
+
+const addUtcDays = (date: Date, days: number) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days));
+
+const addUtcMonthsClamped = (date: Date, months: number) => {
+  const baseYear = date.getUTCFullYear();
+  const baseMonth = date.getUTCMonth() + months;
+  const targetYear = baseYear + Math.floor(baseMonth / 12);
+  const targetMonth = ((baseMonth % 12) + 12) % 12;
+  const lastDayOfMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(targetYear, targetMonth, Math.min(date.getUTCDate(), lastDayOfMonth)));
+};
+
+const diffUtcDays = (start: Date, endExclusive: Date) =>
+  Math.max(0, Math.round((endExclusive.getTime() - start.getTime()) / MS_PER_DAY));
+
+const overlapUtcDays = (
+  start: Date,
+  endExclusive: Date,
+  windowStart: Date,
+  windowEndExclusive: Date,
+) => {
+  const overlapStart = start > windowStart ? start : windowStart;
+  const overlapEnd = endExclusive < windowEndExclusive ? endExclusive : windowEndExclusive;
+  return overlapEnd > overlapStart ? diffUtcDays(overlapStart, overlapEnd) : 0;
+};
+
+const normalizeTags = (tags: unknown): string[] => {
+  if (Array.isArray(tags)) {
+    return tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean);
+  }
+  return [];
+};
 
 export default function Reports() {
   // ---- Load real data ----
@@ -48,15 +124,28 @@ export default function Reports() {
     queryKey: ["/api/notes/latest"],
   });
 
-  const isAnyLoading = animalsLoading || fieldsLoading || propertiesLoading || notesLoading;
+  const { data: allMovements = [], isLoading: movementsLoading } = useQuery<Movement[]>({
+    queryKey: ["/api/movements"],
+  });
+
+  const { data: slaughterRecords = [], isLoading: slaughterLoading } = useQuery<SlaughterRecord[]>({
+    queryKey: ["/api/slaughter-records"],
+  });
+
+  const isAnyLoading =
+    animalsLoading || fieldsLoading || propertiesLoading || notesLoading || movementsLoading || slaughterLoading;
 
   // ---- Filter state ----
   const [asOfDate, setAsOfDate] = useState<string>("");
-const [animalType, setAnimalType] = useState<AnimalTypeFilter>("all");
+  const [animalType, setAnimalType] = useState<AnimalTypeFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("active");
-const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
-
-const NO_LOCATION_ID = "__NO_LOCATION__";
+  const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
+  const [grazingType, setGrazingType] = useState<GrazingTypeFilter>("all_dairy_beef");
+  const [excludeWet, setExcludeWet] = useState(defaultGrazingFilters.excludeWet);
+  const [excludeMissingDob, setExcludeMissingDob] = useState(defaultGrazingFilters.excludeMissingDob);
+  const [excludeUnderSixMonths, setExcludeUnderSixMonths] = useState(defaultGrazingFilters.excludeUnderSixMonths);
+  const [backfillUnknownPastures, setBackfillUnknownPastures] = useState(defaultGrazingFilters.backfillUnknownPastures);
+  const [treatUnknownPastureAsGrazing, setTreatUnknownPastureAsGrazing] = useState(defaultGrazingFilters.treatUnknownPastureAsGrazing);
 
   const fieldById = useMemo(() => new Map(fields.map((f) => [f.id, f])), [fields]);
   const propertyById = useMemo(() => new Map(properties.map((p) => [p.id, p])), [properties]);
@@ -105,22 +194,28 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
   const {
     dairyCount,
     beefCount,
+    aiCount,
     totalAnimals,
     dairyPercentage,
     beefPercentage,
+    aiPercentage,
   } = useMemo(() => {
-    const dairy = filteredAnimals.filter((a) => a.type === "dairy").length;
-    const beef = filteredAnimals.filter((a) => a.type === "beef").length;
+    const dairy = filteredAnimals.filter((a) => String(a.type ?? "").trim().toLowerCase() === "dairy").length;
+    const beef = filteredAnimals.filter((a) => String(a.type ?? "").trim().toLowerCase() === "beef").length;
+    const ai = filteredAnimals.filter((a) => String(a.type ?? "").trim().toLowerCase() === "ai").length;
     const total = filteredAnimals.length;
     const dairyPct = total > 0 ? Math.round((dairy / total) * 100) : 0;
     const beefPct = total > 0 ? Math.round((beef / total) * 100) : 0;
+    const aiPct = total > 0 ? Math.round((ai / total) * 100) : 0;
 
     return {
       dairyCount: dairy,
       beefCount: beef,
+      aiCount: ai,
       totalAnimals: total,
       dairyPercentage: dairyPct,
       beefPercentage: beefPct,
+      aiPercentage: aiPct,
     };
   }, [filteredAnimals]);
 
@@ -136,7 +231,7 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
 
     const map = new Map<
       string,
-      { propertyId?: string; property: string; dairy: number; beef: number }
+      { propertyId?: string; property: string; dairy: number; beef: number; ai: number }
     >();
 
     for (const animal of filteredAnimals) {
@@ -148,14 +243,17 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
       const name = prop?.name ?? "Unassigned / No Property";
 
       if (!map.has(key)) {
-        map.set(key, { propertyId: prop?.id, property: name, dairy: 0, beef: 0 });
+        map.set(key, { propertyId: prop?.id, property: name, dairy: 0, beef: 0, ai: 0 });
       }
 
       const rec = map.get(key)!;
-      if (animal.type === "dairy") {
+      const animalType = String(animal.type ?? "").trim().toLowerCase();
+      if (animalType === "dairy") {
         rec.dairy += 1;
-      } else if (animal.type === "beef") {
+      } else if (animalType === "beef") {
         rec.beef += 1;
+      } else if (animalType === "ai") {
+        rec.ai += 1;
       }
     }
 
@@ -176,7 +274,7 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
 
   const filterSummary = useMemo(() => {
     const typeLabel =
-      animalType === "all" ? "All" : animalType.charAt(0).toUpperCase() + animalType.slice(1);
+      animalType === "all" ? "All" : animalType === "ai" ? "AI" : animalType.charAt(0).toUpperCase() + animalType.slice(1);
     const statusLabel =
       status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1);
     const asOfLabel = asOfDate || new Date().toISOString().split("T")[0];
@@ -198,6 +296,217 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
 
     return { typeLabel, statusLabel, asOfLabel, fieldsLabel };
   }, [animalType, status, asOfDate, selectedFieldIds, fieldById, propertyById]);
+
+  const grazingReport = useMemo(() => {
+    const reportEnd = toUtcDay(asOfDate || new Date()) ?? toUtcDay(new Date())!;
+    const reportEndExclusive = addUtcDays(reportEnd, 1);
+    const reportStart = addUtcMonthsClamped(
+      new Date(Date.UTC(reportEnd.getUTCFullYear(), reportEnd.getUTCMonth(), 1)),
+      -11,
+    );
+
+    const months: GrazingMonthRow[] = Array.from({ length: 12 }, (_, index) => {
+      const monthStart = addUtcMonthsClamped(reportStart, index);
+      const monthEndExclusive = addUtcMonthsClamped(monthStart, 1);
+      return {
+        monthKey: `${monthStart.getUTCFullYear()}-${String(monthStart.getUTCMonth() + 1).padStart(2, "0")}`,
+        monthLabel: monthStart.toLocaleString("en-US", {
+          month: "short",
+          year: "numeric",
+          timeZone: "UTC",
+        }),
+        eligibleHeadDays: 0,
+        grazingHeadDays: 0,
+        grazingDaysPerHeadDay: 0,
+      };
+    });
+
+    const monthWindows = months.map((month, index) => ({
+      month,
+      start: addUtcMonthsClamped(reportStart, index),
+      endExclusive: addUtcMonthsClamped(addUtcMonthsClamped(reportStart, index), 1),
+    }));
+
+    const slaughterByAnimalId = new Map(
+      slaughterRecords
+        .map((record) => [record.animalId, toUtcDay(record.slaughterDate)])
+        .filter((entry): entry is [string, Date] => Boolean(entry[1])),
+    );
+
+    const movementsByAnimalId = new Map<string, Movement[]>();
+    allMovements.forEach((movement) => {
+      const list = movementsByAnimalId.get(movement.animalId) ?? [];
+      list.push(movement);
+      movementsByAnimalId.set(movement.animalId, list);
+    });
+    movementsByAnimalId.forEach((list) =>
+      list.sort((a, b) => {
+        const aTime = toUtcDay(a.movementDate)?.getTime() ?? 0;
+        const bTime = toUtcDay(b.movementDate)?.getTime() ?? 0;
+        return aTime - bTime;
+      }),
+    );
+
+    let excludedMissingDob = 0;
+    let includedMissingDob = 0;
+
+    animals.forEach((animal) => {
+      const normalizedType = String(animal.type ?? "").trim().toLowerCase();
+      if (grazingType === "dairy" && normalizedType !== "dairy") return;
+      if (grazingType === "beef" && normalizedType !== "beef") return;
+      if (grazingType === "all_dairy_beef" && normalizedType !== "dairy" && normalizedType !== "beef") return;
+
+      const normalizedTags = normalizeTags((animal as any).tags);
+      if (excludeWet && normalizedTags.includes("wet")) return;
+
+      const dob = toUtcDay(animal.dateOfBirth);
+      if (!dob) {
+        if (excludeMissingDob) {
+          excludedMissingDob += 1;
+          return;
+        }
+        includedMissingDob += 1;
+      }
+
+      const eligibleStart = (() => {
+        if (!dob) return reportStart;
+        return excludeUnderSixMonths ? addUtcMonthsClamped(dob, 6) : dob;
+      })();
+      const slaughterDate = slaughterByAnimalId.get(animal.id) ?? null;
+      const existenceEndExclusive = slaughterDate ? slaughterDate : reportEndExclusive;
+      const denominatorStart = eligibleStart > reportStart ? eligibleStart : reportStart;
+      const denominatorEndExclusive =
+        existenceEndExclusive < reportEndExclusive ? existenceEndExclusive : reportEndExclusive;
+
+      if (denominatorEndExclusive <= denominatorStart) return;
+
+      monthWindows.forEach(({ month, start, endExclusive }) => {
+        month.eligibleHeadDays += overlapUtcDays(denominatorStart, denominatorEndExclusive, start, endExclusive);
+      });
+
+      const animalMovements = movementsByAnimalId.get(animal.id) ?? [];
+
+      if (backfillUnknownPastures && animalMovements.length > 0) {
+        const firstMovementStart = toUtcDay(animalMovements[0].movementDate);
+        const hasKnownPasture = Boolean(animalMovements[0].toFieldId || animal.currentFieldId);
+        if (firstMovementStart && hasKnownPasture) {
+          const backfillEndExclusive =
+            firstMovementStart < denominatorEndExclusive ? firstMovementStart : denominatorEndExclusive;
+          if (backfillEndExclusive > denominatorStart) {
+            monthWindows.forEach(({ month, start, endExclusive }) => {
+              month.grazingHeadDays += overlapUtcDays(
+                denominatorStart,
+                backfillEndExclusive,
+                start,
+                endExclusive,
+              );
+            });
+          }
+        }
+      }
+
+      animalMovements.forEach((movement, index) => {
+        const intervalStart = toUtcDay(movement.movementDate);
+        if (!intervalStart || !movement.toFieldId) return;
+
+        const nextMovementStart =
+          index + 1 < animalMovements.length ? toUtcDay(animalMovements[index + 1].movementDate) : null;
+
+        let intervalEndExclusive = nextMovementStart ?? reportEndExclusive;
+        if (!nextMovementStart) {
+          if (slaughterDate) {
+            intervalEndExclusive = slaughterDate;
+          } else if (animal.currentFieldId !== movement.toFieldId) {
+            return;
+          }
+        }
+
+        const grazingStart = intervalStart > eligibleStart ? intervalStart : eligibleStart;
+        const grazingEndExclusive =
+          intervalEndExclusive < reportEndExclusive ? intervalEndExclusive : reportEndExclusive;
+
+        if (grazingEndExclusive <= grazingStart) return;
+
+        monthWindows.forEach(({ month, start, endExclusive }) => {
+          month.grazingHeadDays += overlapUtcDays(grazingStart, grazingEndExclusive, start, endExclusive);
+        });
+      });
+
+      if (animalMovements.length === 0 && animal.currentFieldId) {
+        monthWindows.forEach(({ month, start, endExclusive }) => {
+          month.grazingHeadDays += overlapUtcDays(denominatorStart, denominatorEndExclusive, start, endExclusive);
+        });
+      }
+    });
+
+    months.forEach((month) => {
+      if (treatUnknownPastureAsGrazing) {
+        month.grazingHeadDays = month.eligibleHeadDays;
+      }
+      month.grazingDaysPerHeadDay =
+        month.eligibleHeadDays > 0 ? month.grazingHeadDays / month.eligibleHeadDays : 0;
+    });
+
+    return {
+      rows: months,
+      reportStart,
+      reportEnd,
+      excludedMissingDob,
+      includedMissingDob,
+      totals: {
+        eligibleHeadDays: months.reduce((sum, month) => sum + month.eligibleHeadDays, 0),
+        grazingHeadDays: months.reduce((sum, month) => sum + month.grazingHeadDays, 0),
+      },
+    };
+  }, [
+    animals,
+    allMovements,
+    slaughterRecords,
+    asOfDate,
+    backfillUnknownPastures,
+    excludeMissingDob,
+    excludeUnderSixMonths,
+    excludeWet,
+    grazingType,
+    treatUnknownPastureAsGrazing,
+  ]);
+
+  const grazingSummary = useMemo(() => {
+    const ratio =
+      grazingReport.totals.eligibleHeadDays > 0
+        ? grazingReport.totals.grazingHeadDays / grazingReport.totals.eligibleHeadDays
+        : 0;
+    const typeLabel =
+      grazingType === "all_dairy_beef"
+        ? "All Dairy + Beef"
+        : grazingType === "dairy"
+        ? "Dairy"
+        : "Beef";
+
+    return {
+      typeLabel,
+      ratio,
+      windowLabel: `${grazingReport.reportStart.toLocaleString("en-US", {
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      })} to ${grazingReport.reportEnd.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      })}`,
+    };
+  }, [grazingReport, grazingType]);
+
+  const resetGrazingFiltersToDefault = () => {
+    setGrazingType("all_dairy_beef");
+    setExcludeWet(defaultGrazingFilters.excludeWet);
+    setExcludeMissingDob(defaultGrazingFilters.excludeMissingDob);
+    setExcludeUnderSixMonths(defaultGrazingFilters.excludeUnderSixMonths);
+    setBackfillUnknownPastures(defaultGrazingFilters.backfillUnknownPastures);
+    setTreatUnknownPastureAsGrazing(defaultGrazingFilters.treatUnknownPastureAsGrazing);
+  };
 
   const ageFromDob = (dob?: string | Date | null) => {
     if (!dob) return { years: "", months: "" };
@@ -483,6 +792,165 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <CardTitle>Grazing Days Per Head Report</CardTitle>
+              <p className="text-sm text-muted-foreground max-w-3xl">
+                This section uses a rolling 12-month window ending on the As of date above. It includes only
+                the selected dairy and beef animals, treats each day assigned to a field as a grazing day, and
+                can optionally exclude animals missing a date of birth or animals under 6 months old. The
+                monthly ratio is
+                grazing head-days divided by eligible head-days, so `1.00` means every eligible head grazed every
+                day in that month.
+              </p>
+              <p className="text-sm text-muted-foreground max-w-3xl">
+                Movement dates are treated as the first day in the destination field. If an animal has no
+                recorded movements but does have a current field assignment, the report assumes that assignment
+                was already in place at the start of the 12-month window. When missing DOB is included, those
+                animals are treated as eligible for the full report window because age cannot be determined.
+                If backfill is enabled, days before the first recorded movement are counted as grazing days using
+                that animal's earliest known pasture assignment. If unknown pasture days are treated as grazing,
+                then any remaining eligible-but-unassigned time is also counted as grazing, which makes grazing
+                head-days equal eligible head-days by design. Animals tagged `Wet` can be excluded from both the
+                grazing and eligible head-day counts.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="grazing-type-filter">Type</Label>
+                <Select
+                  value={grazingType}
+                  onValueChange={(value) => setGrazingType(value as GrazingTypeFilter)}
+                >
+                  <SelectTrigger id="grazing-type-filter" className="w-full min-w-[220px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all_dairy_beef">All Dairy + Beef</SelectItem>
+                    <SelectItem value="dairy">Dairy</SelectItem>
+                    <SelectItem value="beef">Beef</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                  <Checkbox
+                    checked={excludeWet}
+                    onCheckedChange={(checked) => setExcludeWet(checked === true)}
+                    data-testid="checkbox-grazing-exclude-wet"
+                  />
+                  Exclude animals tagged Wet
+                </label>
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                  <Checkbox
+                    checked={excludeMissingDob}
+                    onCheckedChange={(checked) => setExcludeMissingDob(checked === true)}
+                    data-testid="checkbox-grazing-exclude-missing-dob"
+                  />
+                  Exclude missing date of birth
+                </label>
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                  <Checkbox
+                    checked={excludeUnderSixMonths}
+                    onCheckedChange={(checked) => setExcludeUnderSixMonths(checked === true)}
+                    data-testid="checkbox-grazing-exclude-under-six-months"
+                  />
+                  Exclude under 6 months old
+                </label>
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                  <Checkbox
+                    checked={backfillUnknownPastures}
+                    onCheckedChange={(checked) => setBackfillUnknownPastures(checked === true)}
+                    data-testid="checkbox-grazing-backfill-unknown-pastures"
+                  />
+                  Backfill unknown pasture dates
+                </label>
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                  <Checkbox
+                    checked={treatUnknownPastureAsGrazing}
+                    onCheckedChange={(checked) => setTreatUnknownPastureAsGrazing(checked === true)}
+                    data-testid="checkbox-grazing-treat-unknown-as-grazing"
+                  />
+                  Treat unknown pasture days as grazing
+                </label>
+              </div>
+              <div className="flex items-end pb-2 sm:col-span-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={resetGrazingFiltersToDefault}
+                  data-testid="button-grazing-revert-default"
+                >
+                  Revert to Default
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 text-sm text-muted-foreground md:grid-cols-4">
+            <div><span className="text-foreground font-medium">Window:</span> {grazingSummary.windowLabel}</div>
+            <div><span className="text-foreground font-medium">Type:</span> {grazingSummary.typeLabel}</div>
+            <div><span className="text-foreground font-medium">Wet Excluded:</span> {excludeWet ? "Yes" : "No"}</div>
+            <div>
+              <span className="text-foreground font-medium">Missing DOB Excluded:</span> {excludeMissingDob ? grazingReport.excludedMissingDob : 0}
+            </div>
+            <div>
+              <span className="text-foreground font-medium">Missing DOB Included:</span> {excludeMissingDob ? 0 : grazingReport.includedMissingDob}
+            </div>
+            <div>
+              <span className="text-foreground font-medium">Under 6 Months Excluded:</span> {excludeUnderSixMonths ? "Yes" : "No"}
+            </div>
+            <div>
+              <span className="text-foreground font-medium">Backfill Unknown Pastures:</span> {backfillUnknownPastures ? "Yes" : "No"}
+            </div>
+            <div>
+              <span className="text-foreground font-medium">Unknown Days Counted as Grazing:</span> {treatUnknownPastureAsGrazing ? "Yes" : "No"}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {movementsLoading || slaughterLoading || animalsLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <p className="text-muted-foreground">Loading grazing report...</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead className="text-right">Eligible Head-Days</TableHead>
+                  <TableHead className="text-right">Grazing Head-Days</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {grazingReport.rows.map((row) => (
+                  <TableRow key={row.monthKey}>
+                    <TableCell className="font-medium">{row.monthLabel}</TableCell>
+                    <TableCell className="text-right font-mono">{row.eligibleHeadDays}</TableCell>
+                    <TableCell className="text-right font-mono">{row.grazingHeadDays}</TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="font-bold">
+                  <TableCell>12-Month Total</TableCell>
+                  <TableCell className="text-right font-mono">{grazingReport.totals.eligibleHeadDays}</TableCell>
+                  <TableCell className="text-right font-mono">{grazingReport.totals.grazingHeadDays}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Chart uses filtered per-property counts */}
       <HerdCompositionChart
         data={propertyChartData}
@@ -546,6 +1014,15 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
                     {beefPercentage}%
                   </TableCell>
                 </TableRow>
+                <TableRow>
+                  <TableCell className="font-medium">AI</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {aiCount}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {aiPercentage}%
+                  </TableCell>
+                </TableRow>
                 <TableRow className="font-bold">
                   <TableCell>Total Animals</TableCell>
                   <TableCell className="text-right font-mono">
@@ -582,12 +1059,13 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
                   <TableHead>Property</TableHead>
                   <TableHead className="text-right">Dairy</TableHead>
                   <TableHead className="text-right">Beef</TableHead>
+                  <TableHead className="text-right">AI</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {propertyCounts.map((pc) => {
-                  const total = pc.dairy + pc.beef;
+                  const total = pc.dairy + pc.beef + pc.ai;
                   return (
                     <TableRow key={pc.propertyId ?? pc.property}>
                       <TableCell className="font-medium">
@@ -598,6 +1076,9 @@ const NO_LOCATION_ID = "__NO_LOCATION__";
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {pc.beef}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {pc.ai}
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {total}

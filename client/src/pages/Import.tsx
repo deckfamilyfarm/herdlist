@@ -55,7 +55,7 @@ export default function Import() {
                 <li>• All dates must be in YYYY-MM-DD format</li>
                 <li>• Animal tag numbers must be unique</li>
                 <li>• Reference fields (sireTag, damTag, etc.) must match existing records</li>
-                <li>• Type must be "dairy" or "beef"</li>
+                <li>• Type must be "dairy", "beef", or "ai"</li>
                 <li>• Sex must be "male" or "female"</li>
                 <li>• Breeding method: "live-cover" or "ai"</li>
                 <li>• Property isLeased: "yes" or "no"</li>

@@ -18,6 +18,17 @@ export function IndividualAnimalSelector({
   onSelectionChange,
 }: IndividualAnimalSelectorProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const formatTypeLabel = (type: string) => {
+    const normalizedType = type.trim().toLowerCase();
+    return normalizedType === "ai" ? "AI" : type;
+  };
+  const getTypeColor = (type: string) => {
+    const normalizedType = type.trim().toLowerCase();
+    if (normalizedType === "dairy") return "bg-chart-1";
+    if (normalizedType === "beef") return "bg-chart-3";
+    if (normalizedType === "ai") return "bg-chart-4";
+    return "bg-muted";
+  };
 
   const filteredAnimals = animals.filter(
     (animal) =>
@@ -97,9 +108,9 @@ export function IndividualAnimalSelector({
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge
-                    className={`text-xs ${animal.type === 'dairy' ? 'bg-chart-1' : 'bg-chart-3'}`}
+                    className={`text-xs ${getTypeColor(animal.type)}`}
                   >
-                    {animal.type}
+                    {formatTypeLabel(animal.type)}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{animal.currentLocation}</span>
                 </div>

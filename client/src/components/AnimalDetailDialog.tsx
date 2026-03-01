@@ -231,6 +231,17 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     `${Math.floor((new Date().getTime() - new Date(animal.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years` : 
     'Unknown';
   const normalizedTags = normalizeTags((animal as any).tags);
+  const formatTypeLabel = (type: string) => {
+    const normalizedType = type.trim().toLowerCase();
+    return normalizedType === "ai" ? "AI" : type;
+  };
+  const getTypeColor = (type: string) => {
+    const normalizedType = type.trim().toLowerCase();
+    if (normalizedType === "dairy") return "bg-chart-1";
+    if (normalizedType === "beef") return "bg-chart-3";
+    if (normalizedType === "ai") return "bg-chart-4";
+    return "bg-muted";
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -240,8 +251,8 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
             <div>
               <DialogTitle className="text-2xl flex items-center gap-3">
                 {animal.phenotype || animal.tagNumber}
-                <Badge className={animal.type === 'dairy' ? 'bg-chart-1' : 'bg-chart-3'}>
-                  {animal.type}
+                <Badge className={getTypeColor(animal.type)}>
+                  {formatTypeLabel(animal.type)}
                 </Badge>
                 {/* ✅ Status badge */}
                 <Badge variant={statusVariant[animal.status as AnimalStatus] ?? "outline"}>
@@ -795,9 +806,9 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                             <TableCell className="font-readable-mono font-medium">{child.tagNumber}</TableCell>
                               <TableCell>{child.phenotype || '-'}</TableCell>
                               <TableCell>
-                                <Badge className={child.type === 'dairy' ? 'bg-chart-1' : 'bg-chart-3'}>
-                                  {child.type}
-                              </Badge>
+                                <Badge className={getTypeColor(child.type)}>
+                                  {formatTypeLabel(child.type)}
+                                </Badge>
                             </TableCell>
                             <TableCell className="capitalize">{child.sex}</TableCell>
                             <TableCell>{formatDate(child.dateOfBirth)}</TableCell>
