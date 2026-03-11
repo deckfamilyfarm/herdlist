@@ -40,6 +40,7 @@ const polledRank: Record<PolledStatus, number> = {
 interface AnimalTableProps {
   animals: (Animal & { currentLocation?: string })[];
   onView?: (id: string) => void;
+  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onSearchChange?: (value: string) => void;
   selectedIds?: Set<string>;
@@ -49,6 +50,7 @@ interface AnimalTableProps {
 export function AnimalTable({
   animals,
   onView,
+  onEdit: _onEdit,
   onDelete,
   onSearchChange,
   selectedIds,
@@ -157,7 +159,7 @@ export function AnimalTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-10"></TableHead>
+            <TableHead className="hidden md:table-cell w-10"></TableHead>
             <TableHead>{renderSortButton("Tag Number", "tagNumber")}</TableHead>
             <TableHead>{renderSortButton("Phenotype", "phenotype")}</TableHead>
             <TableHead>{renderSortButton("Type", "type")}</TableHead>
@@ -165,27 +167,32 @@ export function AnimalTable({
             <TableHead data-testid="button-sort-dob">
               {renderSortButton("Date of Birth", "dateOfBirth")}
             </TableHead>
-            <TableHead>{renderSortButton("Location", "currentLocation")}</TableHead>
-            <TableHead>{renderSortButton("Sire", "sireTagNumber")}</TableHead>
-            <TableHead>{renderSortButton("Dam", "damTagNumber")}</TableHead>
-            <TableHead>{renderSortButton("A2", "betacasein")}</TableHead>
-            <TableHead>{renderSortButton("Organic", "organic")}</TableHead>
-            <TableHead>{renderSortButton("Horn Status", "polled")}</TableHead>
-            <TableHead>Tags</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="hidden md:table-cell">{renderSortButton("Location", "currentLocation")}</TableHead>
+            <TableHead className="hidden md:table-cell">{renderSortButton("Sire", "sireTagNumber")}</TableHead>
+            <TableHead className="hidden md:table-cell">{renderSortButton("Dam", "damTagNumber")}</TableHead>
+            <TableHead className="hidden md:table-cell">{renderSortButton("A2", "betacasein")}</TableHead>
+            <TableHead className="hidden md:table-cell">{renderSortButton("Organic", "organic")}</TableHead>
+            <TableHead className="hidden md:table-cell">{renderSortButton("Horn Status", "polled")}</TableHead>
+            <TableHead className="hidden md:table-cell">Tags</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedAnimals.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={13} className="text-center text-muted-foreground">
+              <TableCell colSpan={14} className="text-center text-muted-foreground">
                 No animals found
               </TableCell>
             </TableRow>
           ) : (
             sortedAnimals.map((animal) => (
-              <TableRow key={animal.id} data-testid={`row-animal-${animal.id}`}>
-                <TableCell>
+              <TableRow
+                key={animal.id}
+                data-testid={`row-animal-${animal.id}`}
+                className="cursor-pointer"
+                onClick={() => onView?.(animal.id)}
+              >
+                <TableCell className="hidden md:table-cell" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     aria-label={`Select ${animal.tagNumber}`}
                     checked={selectedIds?.has(animal.id) ?? false}
@@ -204,13 +211,14 @@ export function AnimalTable({
               </TableCell>
               <TableCell className="capitalize">{animal.sex}</TableCell>
               <TableCell className="font-readable-mono">{formatDate(animal.dateOfBirth)}</TableCell>
-              <TableCell>{animal.currentLocation || "-"}</TableCell>
-                <TableCell className="font-readable-mono">
+              <TableCell className="hidden md:table-cell">{animal.currentLocation || "-"}</TableCell>
+                <TableCell className="hidden md:table-cell font-readable-mono">
                   {(animal as any).sireTagNumber ? (
                     <button
                       type="button"
                       className="text-primary hover:underline"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         const value = (animal as any).sireTagNumber as string;
                         onSearchChange?.(value);
                         const el = document.querySelector<HTMLInputElement>('[data-testid="input-search"]');
@@ -226,12 +234,13 @@ export function AnimalTable({
                     "-"
                   )}
                 </TableCell>
-                <TableCell className="font-readable-mono">
+                <TableCell className="hidden md:table-cell font-readable-mono">
                   {(animal as any).damTagNumber ? (
                     <button
                       type="button"
                       className="text-primary hover:underline"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         const value = (animal as any).damTagNumber as string;
                         onSearchChange?.(value);
                         const el = document.querySelector<HTMLInputElement>('[data-testid="input-search"]');
@@ -247,20 +256,23 @@ export function AnimalTable({
                     "-"
                   )}
                 </TableCell>
-                <TableCell>{(animal as any).betacasein || "Not Tested"}</TableCell>
-                <TableCell>{animal.organic ? "OTCO" : "Natural"}</TableCell>
-                <TableCell>{formatPolledStatus((animal as any).polled)}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
+                <TableCell className="hidden md:table-cell">{(animal as any).betacasein || "Not Tested"}</TableCell>
+                <TableCell className="hidden md:table-cell">{animal.organic ? "OTCO" : "Natural"}</TableCell>
+                <TableCell className="hidden md:table-cell">{formatPolledStatus((animal as any).polled)}</TableCell>
+                <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                   {Array.isArray((animal as any).tags) && (animal as any).tags.length > 0
                     ? (animal as any).tags.join(", ")
                     : "-"}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="hidden md:table-cell text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-end gap-2">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => onView?.(animal.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onView?.(animal.id);
+              }}
               data-testid={`button-view-${animal.id}`}
             >
               <Eye className="h-4 w-4" />
@@ -268,7 +280,10 @@ export function AnimalTable({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => onDelete?.(animal.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete?.(animal.id);
+              }}
               data-testid={`button-delete-${animal.id}`}
             >
                       <Trash2 className="h-4 w-4" />

@@ -322,7 +322,7 @@ export default function Animals() {
   useEffect(() => {
     setSelectedIds((prev) => {
       const validIds = new Set(displayAnimals.map((a) => a.id));
-      return new Set([...prev].filter((id) => validIds.has(id)));
+      return new Set(Array.from(prev).filter((id) => validIds.has(id)));
     });
   }, [displayAnimals]);
 
@@ -506,105 +506,110 @@ export default function Animals() {
           </SelectContent>
         </Select>
 
-        {/* Betacasein filter */}
-        <Select
-          value={betacaseinFilter}
-          onValueChange={(val) => setBetacaseinFilter(val as BetacaseinFilter)}
-        >
-          <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-betacasein">
-            <SelectValue placeholder="A2 Genotype" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All A2 Genotype</SelectItem>
-            <SelectItem value="A2/A2">A2/A2</SelectItem>
-            <SelectItem value="A1">A1</SelectItem>
-            <SelectItem value="Not Tested">Not Tested</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Desktop-only filters */}
+        <div className="hidden md:block">
+          <Select
+            value={betacaseinFilter}
+            onValueChange={(val) => setBetacaseinFilter(val as BetacaseinFilter)}
+          >
+            <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-betacasein">
+              <SelectValue placeholder="A2 Genotype" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All A2 Genotype</SelectItem>
+              <SelectItem value="A2/A2">A2/A2</SelectItem>
+              <SelectItem value="A1">A1</SelectItem>
+              <SelectItem value="Not Tested">Not Tested</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        {/* Polled filter */}
-        <Select
-          value={polledFilter}
-          onValueChange={(val) => setPolledFilter(val as PolledFilter)}
-        >
-          <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-polled">
-            <SelectValue placeholder="Horn Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Horn Status</SelectItem>
-            {polledStatusEnum.map((status) => (
-              <SelectItem key={status} value={status}>
-                {status === "not tested"
-                  ? "Not Tested"
-                  : status.charAt(0).toUpperCase() + status.slice(1)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="hidden md:block">
+          <Select
+            value={polledFilter}
+            onValueChange={(val) => setPolledFilter(val as PolledFilter)}
+          >
+            <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-polled">
+              <SelectValue placeholder="Horn Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Horn Status</SelectItem>
+              {polledStatusEnum.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status === "not tested"
+                    ? "Not Tested"
+                    : status.charAt(0).toUpperCase() + status.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        {/* Tags filter */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-tags">
-              {selectedTags.size === 0
-                ? "All tags"
-                : `${selectedTags.size} tag${selectedTags.size > 1 ? "s" : ""} selected`}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
-            <DropdownMenuLabel>Tags</DropdownMenuLabel>
-            <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                setSelectedTags(new Set());
-              }}
-              className="flex items-center gap-2"
-            >
-              <Checkbox checked={selectedTags.size === 0} className="pointer-events-none" />
-              All tags
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {animalTagOptions.map((tag) => (
+        <div className="hidden md:block">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="min-w-[160px]" data-testid="dropdown-tags">
+                {selectedTags.size === 0
+                  ? "All tags"
+                  : `${selectedTags.size} tag${selectedTags.size > 1 ? "s" : ""} selected`}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+              <DropdownMenuLabel>Tags</DropdownMenuLabel>
               <DropdownMenuItem
-                key={tag}
                 onSelect={(e) => {
                   e.preventDefault();
-                  setSelectedTags((prev) => {
-                    const next = new Set(prev);
-                    next.has(tag) ? next.delete(tag) : next.add(tag);
-                    return next;
-                  });
+                  setSelectedTags(new Set());
                 }}
                 className="flex items-center gap-2"
-                data-testid={`checkbox-filter-tag-${tag}`}
               >
-                <Checkbox checked={selectedTags.has(tag)} className="pointer-events-none" />
-                <span className="capitalize">{tag}</span>
+                <Checkbox checked={selectedTags.size === 0} className="pointer-events-none" />
+                All tags
               </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <DropdownMenuSeparator />
+              {animalTagOptions.map((tag) => (
+                <DropdownMenuItem
+                  key={tag}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setSelectedTags((prev) => {
+                      const next = new Set(prev);
+                      next.has(tag) ? next.delete(tag) : next.add(tag);
+                      return next;
+                    });
+                  }}
+                  className="flex items-center gap-2"
+                  data-testid={`checkbox-filter-tag-${tag}`}
+                >
+                  <Checkbox checked={selectedTags.has(tag)} className="pointer-events-none" />
+                  <span className="capitalize">{tag}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
-        {/* Status filter */}
-        <Select
-          value={statusFilter}
-          onValueChange={(val) => setStatusFilter(val as StatusFilter)}
-        >
-          <SelectTrigger
-            className="w-full sm:w-44"
-            data-testid="select-filter-status"
+        <div className="hidden md:block">
+          <Select
+            value={statusFilter}
+            onValueChange={(val) => setStatusFilter(val as StatusFilter)}
           >
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {animalStatusEnum.map((status) => (
-              <SelectItem key={status} value={status}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <SelectTrigger
+              className="w-full sm:w-44"
+              data-testid="select-filter-status"
+            >
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {animalStatusEnum.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between border rounded-md p-3">

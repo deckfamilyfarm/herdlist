@@ -9,6 +9,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Home, List, MapPin, Upload, BarChart3, Scale, LogOut, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -54,6 +55,7 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   const handleLogout = async () => {
     try {
@@ -70,6 +72,12 @@ export function AppSidebar() {
     } finally {
       // Your login screen is at "/", not "/login"
       window.location.href = "/";
+    }
+  };
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
     }
   };
 
@@ -90,6 +98,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild isActive={location === item.url}>
                     <Link
                       href={item.url}
+                      onClick={handleNavClick}
                       data-testid={`link-${item.title
                         .toLowerCase()
                         .replace(/[^a-z0-9]+/g, "-")
