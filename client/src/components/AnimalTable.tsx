@@ -155,7 +155,7 @@ export function AnimalTable({
   }, [animals, sort]);
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border max-w-full overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>

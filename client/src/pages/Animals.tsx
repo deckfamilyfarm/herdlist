@@ -345,23 +345,27 @@ export default function Animals() {
   const deselectAll = () => setSelectedIds(new Set());
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="space-y-6 min-w-0 max-w-full overflow-x-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold" data-testid="text-page-title">
             Animals
           </h1>
           <p className="text-muted-foreground">Manage your herd registry</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} data-testid="button-add-animal">
+        <Button
+          className="w-full sm:w-auto"
+          onClick={() => setDialogOpen(true)}
+          data-testid="button-add-animal"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Animal
         </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 items-stretch sm:items-center min-w-0">
         {/* Search */}
-        <div className="relative flex-1 w-full">
+        <div className="relative w-full sm:flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by tag number or phenotype..."
@@ -375,7 +379,7 @@ export default function Animals() {
         {/* Location filter */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="min-w-[180px]" data-testid="dropdown-fields">
+            <Button variant="outline" className="w-full sm:min-w-[180px]" data-testid="dropdown-fields">
               {selectedFieldIds.size === 0
                 ? "All fields"
                 : `${selectedFieldIds.size} field${selectedFieldIds.size > 1 ? "s" : ""} selected`}
