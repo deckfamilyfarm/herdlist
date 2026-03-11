@@ -59,10 +59,13 @@ const dateOnlyOptional = z
 export const animalStatusEnum = [
   "active",
   "slaughtered",
+  "sold",
   "expired",
 ] as const;
 
 export type AnimalStatus = (typeof animalStatusEnum)[number];
+export const slaughterRecordTypeEnum = ["slaughtered", "sold"] as const;
+export type SlaughterRecordType = (typeof slaughterRecordTypeEnum)[number];
 
 // Polled status enum (replaces boolean)
 export const polledStatusEnum = ["polled", "horned", "not tested"] as const;
@@ -231,11 +234,16 @@ export const slaughterRecords = mysqlTable("slaughter_records", {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   animalId: varchar("animal_id", { length: 36 }).notNull(),
+  recordType: mysqlEnum("record_type", slaughterRecordTypeEnum)
+    .notNull()
+    .default("slaughtered"),
   slaughterDate: date("slaughter_date").notNull(),
   ageMonths: int("age_months"),
   liveWeight: decimal("live_weight", { precision: 10, scale: 2 }),
   hangingWeight: decimal("hanging_weight", { precision: 10, scale: 2 }),
   processor: varchar("processor", { length: 255 }),
+  buyer: varchar("buyer", { length: 255 }),
+  pricePerLb: decimal("price_per_lb", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -368,10 +376,30 @@ export const insertSlaughterRecordSchema = createInsertSchema(slaughterRecords, 
     .nonnegative()
     .nullable()
     .optional(), // backend can compute if omitted
-}).omit({
-  id: true,
-  createdAt: true,
-});
+})
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .superRefine((data, ctx) => {
+    const recordType = data.recordType ?? "slaughtered";
+    if (recordType === "sold") {
+      if (!data.liveWeight) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Live weight is required for sold records.",
+          path: ["liveWeight"],
+        });
+      }
+      if (!data.buyer || !data.buyer.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Buyer is required for sold records.",
+          path: ["buyer"],
+        });
+      }
+    }
+  });
 
 export const insertNoteSchema = createInsertSchema(notes, {
   noteDate: dateOnlyRequired,
@@ -507,15 +535,35 @@ export const csvCalvingRecordSchema = z.object({
 });
 
 export const csvSlaughterRecordSchema = z.object({
-  animalId: z.string().min(1),
+  animalTag: z.string().min(1),
+  recordType: z
+    .string()
+    .optional()
+    .transform((val): SlaughterRecordType => {
+      const normalized = (val || "").trim().toLowerCase();
+      if (!normalized || normalized === "slaughtered" || normalized === "slaughter") {
+        return "slaughtered";
+      }
+      if (normalized === "sold" || normalized === "sale") {
+        return "sold";
+      }
+      throw new Error("recordType must be slaughtered or sold");
+    }),
   slaughterDate: z.string().min(1),
   ageMonths: z
     .string()
     .optional()
-    .transform((val) => (val ? parseInt(val) : undefined)),
+    .transform((val) => {
+      if (!val || !val.trim()) return undefined;
+      const parsed = parseInt(val, 10);
+      if (Number.isNaN(parsed)) throw new Error("ageMonths must be an integer");
+      return parsed;
+    }),
   liveWeight: z.string().optional(),
   hangingWeight: z.string().optional(),
   processor: z.string().optional(),
+  buyer: z.string().optional(),
+  pricePerLb: z.string().optional(),
 });
 
 /* =========================
