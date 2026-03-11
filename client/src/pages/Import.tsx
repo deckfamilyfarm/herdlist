@@ -78,7 +78,7 @@ export default function Import() {
                 <li>• Vaccinations</li>
                 <li>• Events</li>
                 <li>• Calving Records</li>
-                <li>• Slaughter Records</li>
+                <li>• Slaughter/Sold Records</li>
               </ul>
             </CardContent>
           </Card>

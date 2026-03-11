@@ -897,7 +897,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Slaughter Records routes
+  // Slaughter/Sold Records routes
   app.get("/api/slaughter-records", isAdmin, async (req, res) => {
     try {
       const records = await storage.getAllSlaughterRecords();
@@ -921,11 +921,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/slaughter-records/:id", isAdmin, async (req, res) => {
+    try {
+      const validatedData = insertSlaughterRecordSchema.parse(req.body);
+      const record = await storage.updateSlaughterRecord(req.params.id, validatedData);
+      if (!record) {
+        res.status(404).json({ message: "Slaughter/Sold record not found" });
+        return;
+      }
+      res.json(record);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
   app.get("/api/slaughter-records/:id", isAdmin, async (req, res) => {
     try {
       const record = await storage.getSlaughterRecordById(req.params.id);
       if (!record) {
-        res.status(404).json({ message: "Slaughter record not found" });
+        res.status(404).json({ message: "Slaughter/Sold record not found" });
         return;
       }
       res.json(record);
@@ -1261,14 +1279,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (!animal) {
                 throw new Error(`Animal with tag "${csvRow.animalTag}" not found`);
               }
+
+              if (csvRow.recordType === "sold") {
+                if (!csvRow.liveWeight) {
+                  throw new Error("liveWeight is required when recordType is sold");
+                }
+                if (!csvRow.buyer) {
+                  throw new Error("buyer is required when recordType is sold");
+                }
+              }
               
               validRecords.push({
                 animalId: animal.id,
+                recordType: csvRow.recordType,
                 slaughterDate: csvRow.slaughterDate,
-                ageMonths: csvRow.ageMonths ? parseInt(csvRow.ageMonths) : null,
+                ageMonths: csvRow.ageMonths ?? null,
                 liveWeight: csvRow.liveWeight || null,
                 hangingWeight: csvRow.hangingWeight || null,
                 processor: csvRow.processor || null,
+                buyer: csvRow.buyer || null,
+                pricePerLb: csvRow.pricePerLb || null,
               });
             } catch (error: any) {
               result.failed++;

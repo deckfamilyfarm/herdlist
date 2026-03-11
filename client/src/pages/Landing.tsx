@@ -89,7 +89,7 @@ export default function Landing() {
               <li>Location tracking across properties</li>
               <li>Vaccination and health records</li>
               <li>Movement history</li>
-              <li>Calving and slaughter data</li>
+              <li>Calving and slaughter/sold data</li>
             </ul>
           </div>
 

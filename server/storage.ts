@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, sql, and, or, gte, desc, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
@@ -68,6 +68,99 @@ const normalizePolledStatus = (value: any): PolledStatus => {
   }
 
   return "not tested";
+};
+
+const resolveSlaughterRecordType = (
+  value: unknown,
+  fallback: "slaughtered" | "sold" = "slaughtered",
+  hasSoldSignals = false,
+): "slaughtered" | "sold" => {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "sold") return "sold";
+  if (normalized === "slaughtered") return "slaughtered";
+  if (hasSoldSignals) return "sold";
+  return fallback;
+};
+
+const isMissingSlaughterColumnError = (error: unknown) => {
+  const code = (error as any)?.code;
+  const message = String((error as any)?.message ?? "");
+  return code === "ER_BAD_FIELD_ERROR" || /unknown column/i.test(message);
+};
+
+const isStatusEnumError = (error: unknown) => {
+  const code = (error as any)?.code;
+  const message = String((error as any)?.message ?? "");
+  return (
+    code === "WARN_DATA_TRUNCATED" ||
+    code === "ER_TRUNCATED_WRONG_VALUE_FOR_FIELD" ||
+    /data truncated for column 'status'/i.test(message)
+  );
+};
+
+const parseLegacySoldBuyer = (processor: unknown): string | null => {
+  if (typeof processor !== "string") return null;
+  if (!processor.startsWith("SOLD:")) return null;
+  const value = processor.slice(5).trim();
+  return value || null;
+};
+
+const mapSlaughterRow = (row: any): SlaughterRecord => {
+  const legacyBuyer = parseLegacySoldBuyer(row.processor);
+  const buyer = row.buyer ?? legacyBuyer ?? null;
+  const pricePerLb = row.price_per_lb ?? row.pricePerLb ?? null;
+  const recordType = resolveSlaughterRecordType(
+    row.record_type ?? row.recordType,
+    "slaughtered",
+    Boolean(buyer || pricePerLb),
+  );
+
+  return {
+    id: row.id,
+    animalId: row.animal_id ?? row.animalId,
+    recordType,
+    slaughterDate: row.slaughter_date ?? row.slaughterDate,
+    ageMonths: row.age_months ?? row.ageMonths ?? null,
+    liveWeight: row.live_weight ?? row.liveWeight ?? null,
+    hangingWeight: row.hanging_weight ?? row.hangingWeight ?? null,
+    processor: legacyBuyer ? null : (row.processor ?? null),
+    buyer,
+    pricePerLb,
+    createdAt: row.created_at ?? row.createdAt,
+  } as SlaughterRecord;
+};
+
+const setAnimalRemovalStatus = async (
+  animalId: string,
+  recordType: "slaughtered" | "sold",
+) => {
+  const desiredStatus = recordType === "sold" ? "sold" : "slaughtered";
+  try {
+    await db
+      .update(animals)
+      .set({
+        status: desiredStatus,
+        currentFieldId: null,
+        herdName: null,
+      })
+      .where(eq(animals.id, animalId));
+  } catch (error: any) {
+    // Legacy DBs may not yet have status enum value "sold".
+    if (recordType === "sold" && isStatusEnumError(error)) {
+      await db
+        .update(animals)
+        .set({
+          status: "slaughtered",
+          currentFieldId: null,
+          herdName: null,
+        })
+        .where(eq(animals.id, animalId));
+      return;
+    }
+    throw error;
+  }
 };
 
 export interface IStorage {
@@ -141,8 +234,9 @@ export interface IStorage {
   updateBreedingRecord(id: string, record: Partial<InsertBreedingRecord>): Promise<BreedingRecord | undefined>;
   deleteBreedingRecord(id: string): Promise<void>;
 
-  // Slaughter Records
+  // Slaughter/Sold Records
   createSlaughterRecord(record: InsertSlaughterRecord): Promise<SlaughterRecord>;
+  updateSlaughterRecord(id: string, record: InsertSlaughterRecord): Promise<SlaughterRecord | undefined>;
   getAllSlaughterRecords(): Promise<SlaughterRecord[]>;
   getSlaughterRecordById(id: string): Promise<SlaughterRecord | undefined>;
   deleteSlaughterRecord(id: string): Promise<void>;
@@ -595,12 +689,15 @@ export class DatabaseStorage implements IStorage {
     await db.delete(calvingRecords).where(eq(calvingRecords.id, id));
   }
 
-  // ---------- Slaughter Records ----------
-
-    // ---------- Slaughter Records ----------
+  // ---------- Slaughter/Sold Records ----------
 
   async createSlaughterRecord(record: InsertSlaughterRecord): Promise<SlaughterRecord> {
     const id = crypto.randomUUID();
+    const recordType = resolveSlaughterRecordType(
+      (record as any).recordType,
+      "slaughtered",
+      Boolean((record as any).buyer || (record as any).pricePerLb),
+    );
 
     // Compute ageMonths on backend if not provided
     let ageMonths: number | null = record.ageMonths ?? null;
@@ -628,37 +725,158 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    await db.insert(slaughterRecords).values({
-      ...(record as any),
-      id,
-      ageMonths,
-    });
+    try {
+      await db.insert(slaughterRecords).values({
+        ...(record as any),
+        id,
+        recordType,
+        ageMonths,
+        hangingWeight: recordType === "sold" ? null : ((record as any).hangingWeight ?? null),
+        processor: recordType === "sold" ? null : ((record as any).processor ?? null),
+        buyer: recordType === "sold" ? ((record as any).buyer ?? null) : null,
+        pricePerLb: recordType === "sold" ? ((record as any).pricePerLb ?? null) : null,
+      });
+    } catch (error: any) {
+      if (!isMissingSlaughterColumnError(error)) {
+        throw error;
+      }
 
-    // Mark animal as slaughtered + clear field/herd
-  await db
-    .update(animals)
-    .set({
-      status: "slaughtered",
-      currentFieldId: null,
-      herdName: null,
-    })
-    .where(eq(animals.id, record.animalId));	
+      // Legacy schema fallback (without record_type/buyer/price_per_lb columns)
+      const legacyProcessor =
+        recordType === "sold"
+          ? `SOLD:${((record as any).buyer ?? "").toString().trim()}`
+          : ((record as any).processor ?? null);
+      await pool.query(
+        "INSERT INTO slaughter_records (id, animal_id, slaughter_date, age_months, live_weight, hanging_weight, processor) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          id,
+          record.animalId,
+          record.slaughterDate as any,
+          ageMonths,
+          (record as any).liveWeight ?? null,
+          recordType === "sold" ? null : ((record as any).hangingWeight ?? null),
+          legacyProcessor,
+        ],
+      );
+    }
 
-    const [created] = await db
-      .select()
-      .from(slaughterRecords)
-      .where(eq(slaughterRecords.id, id));
+    // Mark animal as removed from herd + clear field/herd
+    await setAnimalRemovalStatus(record.animalId, recordType);
 
-    return created as SlaughterRecord;
+    const created = await this.getSlaughterRecordById(id);
+    if (!created) {
+      throw new Error("Unable to load created slaughter/sold record");
+    }
+    return created;
+  }
+
+  async updateSlaughterRecord(
+    id: string,
+    record: InsertSlaughterRecord,
+  ): Promise<SlaughterRecord | undefined> {
+    const existing = await this.getSlaughterRecordById(id);
+    if (!existing) return undefined;
+
+    const recordType = resolveSlaughterRecordType(
+      (record as any).recordType,
+      resolveSlaughterRecordType((existing as any).recordType, "slaughtered", Boolean((existing as any).buyer || (existing as any).pricePerLb)),
+      Boolean((record as any).buyer || (record as any).pricePerLb),
+    );
+
+    let ageMonths: number | null = record.ageMonths ?? null;
+    if (ageMonths == null && record.animalId && record.slaughterDate) {
+      const animal = await this.getAnimalById(record.animalId);
+      if (animal?.dateOfBirth) {
+        const dob = new Date(animal.dateOfBirth as any);
+        const slaughter = new Date(record.slaughterDate as any);
+        if (!isNaN(dob.getTime()) && !isNaN(slaughter.getTime())) {
+          let months =
+            (slaughter.getFullYear() - dob.getFullYear()) * 12 +
+            (slaughter.getMonth() - dob.getMonth());
+          if (slaughter.getDate() < dob.getDate()) {
+            months -= 1;
+          }
+          if (months < 0) months = 0;
+          ageMonths = months;
+        }
+      }
+    }
+
+    try {
+      await db
+        .update(slaughterRecords)
+        .set({
+          ...(record as any),
+          recordType,
+          ageMonths,
+          hangingWeight: recordType === "sold" ? null : ((record as any).hangingWeight ?? null),
+          processor: recordType === "sold" ? null : ((record as any).processor ?? null),
+          buyer: recordType === "sold" ? ((record as any).buyer ?? null) : null,
+          pricePerLb: recordType === "sold" ? ((record as any).pricePerLb ?? null) : null,
+        })
+        .where(eq(slaughterRecords.id, id));
+    } catch (error: any) {
+      if (!isMissingSlaughterColumnError(error)) {
+        throw error;
+      }
+
+      // Legacy schema fallback (without record_type/buyer/price_per_lb columns)
+      const legacyProcessor =
+        recordType === "sold"
+          ? `SOLD:${((record as any).buyer ?? "").toString().trim()}`
+          : ((record as any).processor ?? null);
+      await pool.query(
+        "UPDATE slaughter_records SET animal_id = ?, slaughter_date = ?, age_months = ?, live_weight = ?, hanging_weight = ?, processor = ? WHERE id = ?",
+        [
+          record.animalId,
+          record.slaughterDate as any,
+          ageMonths,
+          (record as any).liveWeight ?? null,
+          recordType === "sold" ? null : ((record as any).hangingWeight ?? null),
+          legacyProcessor,
+          id,
+        ],
+      );
+    }
+
+    await setAnimalRemovalStatus(record.animalId, recordType);
+
+    const updated = await this.getSlaughterRecordById(id);
+    return updated;
   }
  
   async getAllSlaughterRecords(): Promise<SlaughterRecord[]> {
-    return await db.select().from(slaughterRecords).orderBy(desc(slaughterRecords.slaughterDate));
+    try {
+      const rows = await db.select().from(slaughterRecords).orderBy(desc(slaughterRecords.slaughterDate));
+      return rows.map((row) => mapSlaughterRow(row));
+    } catch (error: any) {
+      if (!isMissingSlaughterColumnError(error)) {
+        throw error;
+      }
+
+      const [rows] = await pool.query(
+        "SELECT id, animal_id, slaughter_date, age_months, live_weight, hanging_weight, processor, created_at FROM slaughter_records ORDER BY slaughter_date DESC",
+      );
+      return (rows as any[]).map((row) => mapSlaughterRow(row));
+    }
   }
 
   async getSlaughterRecordById(id: string): Promise<SlaughterRecord | undefined> {
-    const [record] = await db.select().from(slaughterRecords).where(eq(slaughterRecords.id, id));
-    return record;
+    try {
+      const [record] = await db.select().from(slaughterRecords).where(eq(slaughterRecords.id, id));
+      return record ? mapSlaughterRow(record) : undefined;
+    } catch (error: any) {
+      if (!isMissingSlaughterColumnError(error)) {
+        throw error;
+      }
+
+      const [rows] = await pool.query(
+        "SELECT id, animal_id, slaughter_date, age_months, live_weight, hanging_weight, processor, created_at FROM slaughter_records WHERE id = ? LIMIT 1",
+        [id],
+      );
+      const first = (rows as any[])[0];
+      return first ? mapSlaughterRow(first) : undefined;
+    }
   }
 
   async deleteSlaughterRecord(id: string): Promise<void> {
@@ -903,8 +1121,77 @@ export class DatabaseStorage implements IStorage {
     const withIds = recordList.map((r) => ({
       ...(r as any),
       id: crypto.randomUUID(),
+      recordType: resolveSlaughterRecordType(
+        (r as any).recordType,
+        "slaughtered",
+        Boolean((r as any).buyer || (r as any).pricePerLb),
+      ),
+      hangingWeight:
+        resolveSlaughterRecordType(
+          (r as any).recordType,
+          "slaughtered",
+          Boolean((r as any).buyer || (r as any).pricePerLb),
+        ) === "sold"
+          ? null
+          : ((r as any).hangingWeight ?? null),
+      processor:
+        resolveSlaughterRecordType(
+          (r as any).recordType,
+          "slaughtered",
+          Boolean((r as any).buyer || (r as any).pricePerLb),
+        ) === "sold"
+          ? null
+          : ((r as any).processor ?? null),
+      buyer:
+        resolveSlaughterRecordType(
+          (r as any).recordType,
+          "slaughtered",
+          Boolean((r as any).buyer || (r as any).pricePerLb),
+        ) === "sold"
+          ? ((r as any).buyer ?? null)
+          : null,
+      pricePerLb:
+        resolveSlaughterRecordType(
+          (r as any).recordType,
+          "slaughtered",
+          Boolean((r as any).buyer || (r as any).pricePerLb),
+        ) === "sold"
+          ? ((r as any).pricePerLb ?? null)
+          : null,
     }));
     await db.insert(slaughterRecords).values(withIds);
+
+    const soldAnimalIds = Array.from(
+      new Set(withIds.filter((r) => r.recordType === "sold").map((r) => r.animalId)),
+    );
+    const slaughteredAnimalIds = Array.from(
+      new Set(withIds.filter((r) => r.recordType !== "sold").map((r) => r.animalId)),
+    );
+
+    if (soldAnimalIds.length > 0) {
+      try {
+        await db
+          .update(animals)
+          .set({ status: "sold", currentFieldId: null, herdName: null })
+          .where(inArray(animals.id, soldAnimalIds));
+      } catch (error: any) {
+        if (!isStatusEnumError(error)) {
+          throw error;
+        }
+        await db
+          .update(animals)
+          .set({ status: "slaughtered", currentFieldId: null, herdName: null })
+          .where(inArray(animals.id, soldAnimalIds));
+      }
+    }
+
+    if (slaughteredAnimalIds.length > 0) {
+      await db
+        .update(animals)
+        .set({ status: "slaughtered", currentFieldId: null, herdName: null })
+        .where(inArray(animals.id, slaughteredAnimalIds));
+    }
+
     return [];
   }
 

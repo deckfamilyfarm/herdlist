@@ -424,7 +424,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
             </Select>
           </div>
 
-          {/* ✅ Status selector with slaughtered disabled + note */}
+          {/* Status selector with slaughtered/sold disabled + note */}
           <div className="space-y-2">
             <Label htmlFor="status">Status *</Label>
             <Select
@@ -438,10 +438,12 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               </SelectTrigger>
               <SelectContent>
                 {animalStatusEnum.map((status) => {
-                  if (status === "slaughtered") {
+                  if (status === "slaughtered" || status === "sold") {
                     return (
                       <SelectItem key={status} value={status} disabled>
-                        Slaughtered (use Slaughtered Form)
+                        {status === "sold"
+                          ? "Sold (use Slaughter/Sold form)"
+                          : "Slaughtered (use Slaughter/Sold form)"}
                       </SelectItem>
                     );
                   }
@@ -454,7 +456,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground mt-1">
-              To mark an animal as slaughtered, use the dedicated Slaughtered Form screen.
+              To mark an animal as slaughtered or sold, use the Slaughter/Sold screen.
             </p>
           </div>
 

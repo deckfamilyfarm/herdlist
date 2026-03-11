@@ -44,6 +44,7 @@ interface AnimalDetailDialogProps {
 const statusLabel: Record<AnimalStatus, string> = {
   active: "Active",
   slaughtered: "Slaughtered",
+  sold: "Sold",
   expired: "Expired",
 };
 
@@ -52,6 +53,7 @@ const statusVariant: Partial<
 > = {
   active: "default",
   slaughtered: "secondary",
+  sold: "secondary",
   expired: "secondary",
 };
 

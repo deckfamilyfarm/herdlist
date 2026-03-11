@@ -36,7 +36,7 @@ const menuItems = [
     icon: BarChart3,
   },
   {
-    title: "Slaughter Report",
+    title: "Slaughter/Sold",
     url: "/slaughter",
     icon: Scale,
   },
@@ -88,7 +88,13 @@ export function AppSidebar() {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                    <Link
+                      href={item.url}
+                      data-testid={`link-${item.title
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, "-")
+                        .replace(/^-|-$/g, "")}`}
+                    >
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>

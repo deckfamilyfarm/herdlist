@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `animals` (
   `betacasein` ENUM('A2/A2','A1','Not Tested'),
   `polled` ENUM('polled','horned','not tested') DEFAULT 'not tested',
   `herd_name` ENUM('wet', 'nurse', 'finish', 'main', 'grafting', 'yearling', 'missing', 'bull'),
-  `status` ENUM('active', 'slaughtered', 'expired') NOT NULL DEFAULT 'active',
+  `status` ENUM('active', 'slaughtered', 'sold', 'expired') NOT NULL DEFAULT 'active',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -122,11 +122,14 @@ CREATE TABLE IF NOT EXISTS `calving_records` (
 CREATE TABLE IF NOT EXISTS `slaughter_records` (
   `id` VARCHAR(36) PRIMARY KEY,
   `animal_id` VARCHAR(36) NOT NULL,
+  `record_type` ENUM('slaughtered', 'sold') NOT NULL DEFAULT 'slaughtered',
   `slaughter_date` DATE NOT NULL,
   `age_months` INT,
   `live_weight` DECIMAL(10, 2),
   `hanging_weight` DECIMAL(10, 2),
   `processor` VARCHAR(255),
+  `buyer` VARCHAR(255),
+  `price_per_lb` DECIMAL(10, 2),
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`animal_id`) REFERENCES `animals`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

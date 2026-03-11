@@ -17,7 +17,7 @@ const DATA_TYPES = [
   { value: "vaccinations", label: "Vaccinations" },
   { value: "events", label: "Events" },
   { value: "calving-records", label: "Calving Records" },
-  { value: "slaughter-records", label: "Slaughter Records" },
+  { value: "slaughter-records", label: "Slaughter/Sold Records" },
   { value: "notes", label: "Notes" },
 ] as const;
 
@@ -40,7 +40,17 @@ const CSV_TEMPLATES: Record<string, string[]> = {
   vaccinations: ["animalTag", "vaccineName", "administeredDate", "administeredBy", "nextDueDate"],
   events: ["animalTag", "eventType", "eventDate", "description"],
   "calving-records": ["damTag", "calvingDate", "calfTag", "calfSex", "notes"],
-  "slaughter-records": ["animalTag", "slaughterDate", "ageMonths", "liveWeight", "hangingWeight", "processor"],
+  "slaughter-records": [
+    "animalTag",
+    "recordType",
+    "slaughterDate",
+    "ageMonths",
+    "liveWeight",
+    "hangingWeight",
+    "processor",
+    "buyer",
+    "pricePerLb",
+  ],
   notes: ["tagNumber", "noteDate", "note"],
 };
 
@@ -80,8 +90,10 @@ const FORMAT_NOTES: Record<string, string[]> = {
   ],
   "slaughter-records": [
     "animalTag must match existing animal",
+    "recordType: slaughtered or sold (defaults to slaughtered)",
     "slaughterDate: YYYY-MM-DD",
-    "Weights: decimal numbers",
+    "Sold records use liveWeight + buyer (+ optional pricePerLb)",
+    "Slaughtered records use liveWeight + hangingWeight + processor",
   ],
   notes: [
     "tagNumber: animal tag to attach the note",
