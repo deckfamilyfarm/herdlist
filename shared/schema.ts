@@ -147,6 +147,7 @@ export const properties = mysqlTable("properties", {
   leaseStartDate: date("lease_start_date"),
   leaseEndDate: date("lease_end_date"),
   leaseholder: varchar("leaseholder", { length: 255 }),
+  boundaryGeoJson: json("boundary_geojson").$type<Record<string, unknown> | null>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -158,6 +159,7 @@ export const fields = mysqlTable("fields", {
   propertyId: varchar("property_id", { length: 36 }).notNull(),
   capacity: int("capacity"),
   acres: int("acres"),
+  boundaryGeoJson: json("boundary_geojson").$type<Record<string, unknown> | null>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -318,6 +320,7 @@ export const insertAnimalSchema = createInsertSchema(animals, {
 export const insertPropertySchema = createInsertSchema(properties, {
   leaseStartDate: dateOnlyOptional,
   leaseEndDate: dateOnlyOptional,
+  boundaryGeoJson: z.record(z.any()).optional().nullable(),
 }).omit({
   id: true,
   createdAt: true,
@@ -327,6 +330,7 @@ export const insertFieldSchema = createInsertSchema(fields, {
   // Coerce string from input into number
   capacity: z.coerce.number().int().optional().nullable(),
   acres: z.coerce.number().int().optional().nullable(),
+  boundaryGeoJson: z.record(z.any()).optional().nullable(),
 }).omit({
   id: true,
   createdAt: true,

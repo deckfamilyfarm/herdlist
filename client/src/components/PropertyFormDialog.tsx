@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState, useEffect } from "react";
@@ -8,6 +9,10 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { InsertProperty, Property } from "@shared/schema";
+import {
+  formatPropertyBoundaryGeoJson,
+  parsePropertyBoundaryGeoJson,
+} from "@/lib/geojson";
 
 interface PropertyFormDialogProps {
   open: boolean;
@@ -16,9 +21,15 @@ interface PropertyFormDialogProps {
   property?: Property;
 }
 
+const toDateInputValue = (value: string | Date | null | undefined) => {
+  if (!value) return "";
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value;
+};
+
 export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: PropertyFormDialogProps) {
   const { toast } = useToast();
   const isEditMode = !!property;
+  const [boundaryGeoJsonText, setBoundaryGeoJsonText] = useState("");
   
   const [formData, setFormData] = useState({
     name: "",
@@ -33,10 +44,11 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
       setFormData({
         name: property.name || "",
         isLeased: property.isLeased || "no",
-        leaseStartDate: property.leaseStartDate || "",
-        leaseEndDate: property.leaseEndDate || "",
+        leaseStartDate: toDateInputValue(property.leaseStartDate),
+        leaseEndDate: toDateInputValue(property.leaseEndDate),
         leaseholder: property.leaseholder || "",
       });
+      setBoundaryGeoJsonText(formatPropertyBoundaryGeoJson(property.boundaryGeoJson));
     } else {
       setFormData({
         name: "",
@@ -45,6 +57,7 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
         leaseEndDate: "",
         leaseholder: "",
       });
+      setBoundaryGeoJsonText("");
     }
   }, [property, open]);
 
@@ -71,6 +84,7 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
           leaseEndDate: "",
           leaseholder: "",
         });
+        setBoundaryGeoJsonText("");
       }
     },
     onError: (error: Error) => {
@@ -84,12 +98,23 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const { geoJson, error } = parsePropertyBoundaryGeoJson(boundaryGeoJsonText);
+    if (error) {
+      toast({
+        title: "Invalid GeoJSON",
+        description: error,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const submitData: InsertProperty = {
       name: formData.name,
       isLeased: formData.isLeased,
       leaseStartDate: formData.isLeased === "yes" && formData.leaseStartDate ? formData.leaseStartDate : null,
       leaseEndDate: formData.isLeased === "yes" && formData.leaseEndDate ? formData.leaseEndDate : null,
       leaseholder: formData.isLeased === "yes" && formData.leaseholder ? formData.leaseholder : null,
+      boundaryGeoJson: geoJson,
     };
     createPropertyMutation.mutate(submitData);
     onSubmit?.(submitData);
@@ -97,7 +122,7 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" data-testid="dialog-add-property">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-add-property">
         <DialogHeader>
           <DialogTitle>{isEditMode ? "Edit Property" : "Add New Property"}</DialogTitle>
         </DialogHeader>
@@ -166,6 +191,33 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
               </div>
             </>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="boundaryGeoJson">Boundary GeoJSON</Label>
+            <Textarea
+              id="boundaryGeoJson"
+              value={boundaryGeoJsonText}
+              onChange={(e) => setBoundaryGeoJsonText(e.target.value)}
+              className="min-h-[220px] font-readable-mono text-xs sm:text-sm"
+              placeholder='Paste a Polygon, MultiPolygon, Feature, or FeatureCollection here'
+              data-testid="textarea-boundary-geojson"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave blank if this property does not have a mapped boundary yet.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Need to create a boundary file? Use{" "}
+              <a
+                href="https://berkeleymapper.berkeley.edu"
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary underline underline-offset-2"
+              >
+                berkeleymapper.berkeley.edu
+              </a>
+              .
+            </p>
+          </div>
 
           <div className="flex justify-end gap-2 pt-4">
             <Button 

@@ -17,15 +17,17 @@ interface Field {
   capacity?: number;
   currentCount: number;
   acres?: number | null;
+  boundaryGeoJson?: Record<string, unknown> | null;
 }
 
 interface Property {
   id: string;
   name: string;
   isLeased: string;
-  leaseStartDate?: string;
-  leaseEndDate?: string;
+  leaseStartDate?: string | Date;
+  leaseEndDate?: string | Date;
   leaseholder?: string;
+  boundaryGeoJson?: Record<string, unknown> | null;
   fields: Field[];
 }
 
@@ -35,7 +37,14 @@ interface PropertyWithFieldsProps {
   onEditProperty?: (propertyId: string) => void;
   onEditField?: (fieldId: string) => void;
   onDeleteField?: (fieldId: string) => void;
+  onOpenShape?: (propertyId: string) => void;
+  onOpenFieldShape?: (fieldId: string) => void;
 }
+
+const formatDateDisplay = (value: string | Date | undefined) => {
+  if (!value) return "";
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value;
+};
 
 export function PropertyWithFields({ 
   property, 
@@ -43,19 +52,27 @@ export function PropertyWithFields({
   onEditProperty,
   onEditField,
   onDeleteField,
+  onOpenShape,
+  onOpenFieldShape,
 }: PropertyWithFieldsProps) {
   const totalAnimals = property.fields.reduce((sum, field) => sum + field.currentCount, 0);
   const totalCapacity = property.fields.reduce((sum, field) => sum + (field.capacity || 0), 0);
 
   return (
-    <Card data-testid={`card-property-${property.id}`}>
+    <Card className="transition-colors hover:bg-muted/20" data-testid={`card-property-${property.id}`}>
       <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-4">
-        <div className="flex-1">
+        <div
+          className="flex-1 cursor-pointer"
+          onClick={() => onOpenShape?.(property.id)}
+        >
           <div className="flex items-center gap-3">
             <MapPin className="h-5 w-5 text-chart-1" />
             <CardTitle className="text-lg">{property.name}</CardTitle>
             {property.isLeased === "yes" && (
               <Badge variant="secondary" data-testid={`badge-leased-${property.id}`}>Leased</Badge>
+            )}
+            {property.boundaryGeoJson && (
+              <Badge variant="outline">Mapped</Badge>
             )}
           </div>
           {property.isLeased === "yes" && property.leaseholder && (
@@ -67,7 +84,7 @@ export function PropertyWithFields({
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                   <Calendar className="h-3.5 w-3.5" />
                   <span>
-                    {property.leaseStartDate} - {property.leaseEndDate}
+                    {formatDateDisplay(property.leaseStartDate)} - {formatDateDisplay(property.leaseEndDate)}
                   </span>
                 </div>
               )}
@@ -77,7 +94,10 @@ export function PropertyWithFields({
         <Button 
           variant="ghost" 
           size="sm"
-          onClick={() => onEditProperty?.(property.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onEditProperty?.(property.id);
+          }}
           data-testid={`button-edit-property-${property.id}`}
         >
           <Edit className="h-4 w-4" />
@@ -85,7 +105,10 @@ export function PropertyWithFields({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex gap-6 text-sm">
+          <div
+            className="flex cursor-pointer gap-6 text-sm"
+            onClick={() => onOpenShape?.(property.id)}
+          >
             <div>
               <p className="text-muted-foreground">Total Fields</p>
               <p className="font-semibold text-lg" data-testid={`text-field-count-${property.id}`}>
@@ -110,7 +133,10 @@ export function PropertyWithFields({
           <Button 
             size="sm" 
             variant="outline"
-            onClick={() => onAddField?.(property.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddField?.(property.id);
+            }}
             data-testid={`button-add-field-${property.id}`}
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -138,8 +164,38 @@ export function PropertyWithFields({
                     : null;
                   
                   return (
-                    <TableRow key={field.id} data-testid={`row-field-${field.id}`}>
-                      <TableCell className="font-medium">{field.name}</TableCell>
+                    <TableRow
+                      key={field.id}
+                      className={field.boundaryGeoJson ? "cursor-pointer" : undefined}
+                      onClick={
+                        field.boundaryGeoJson
+                          ? (event) => {
+                              event.stopPropagation();
+                              onOpenFieldShape?.(field.id);
+                            }
+                          : undefined
+                      }
+                      data-testid={`row-field-${field.id}`}
+                    >
+                      <TableCell className="font-medium">
+                        {field.boundaryGeoJson ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto min-h-0 p-0 font-medium text-foreground hover:bg-transparent"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenFieldShape?.(field.id);
+                            }}
+                            data-testid={`button-open-field-name-${field.id}`}
+                          >
+                            {field.name}
+                          </Button>
+                        ) : (
+                          field.name
+                        )}
+                      </TableCell>
+
                       <TableCell className="font-mono" data-testid={`text-current-count-${field.id}`}>
                         {field.currentCount}
                       </TableCell>
@@ -169,10 +225,27 @@ export function PropertyWithFields({
                         )}
                       </TableCell>
                       <TableCell className="text-right">
+                        {field.boundaryGeoJson && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-primary underline underline-offset-2"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenFieldShape?.(field.id);
+                            }}
+                            data-testid={`button-view-field-shape-${field.id}`}
+                          >
+                            Mapped
+                          </Button>
+                        )}
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          onClick={() => onEditField?.(field.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onEditField?.(field.id);
+                          }}
                           data-testid={`button-edit-field-${field.id}`}
                         >
                           Edit
@@ -180,7 +253,10 @@ export function PropertyWithFields({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onDeleteField?.(field.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onDeleteField?.(field.id);
+                          }}
                           data-testid={`button-delete-field-${field.id}`}
                         >
                           Delete

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS `properties` (
   `lease_start_date` DATE,
   `lease_end_date` DATE,
   `leaseholder` VARCHAR(255),
+  `boundary_geojson` JSON,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS `fields` (
   `property_id` VARCHAR(36) NOT NULL,
   `capacity` INT,
   `acres` INT,
+  `boundary_geojson` JSON,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`property_id`) REFERENCES `properties`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

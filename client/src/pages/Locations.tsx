@@ -1,6 +1,7 @@
 import { PropertyWithFields } from "@/components/PropertyWithFields";
 import { PropertyFormDialog } from "@/components/PropertyFormDialog";
 import { FieldFormDialog } from "@/components/FieldFormDialog";
+import { PropertyShapeDialog } from "@/components/PropertyShapeDialog";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +12,11 @@ import { useMemo, useState } from "react";
 export default function Locations() {
   const [propertyDialogOpen, setPropertyDialogOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | undefined>(undefined);
+  const [shapeDialogOpen, setShapeDialogOpen] = useState(false);
+  const [shapeDialogTitle, setShapeDialogTitle] = useState<string | undefined>(undefined);
+  const [shapeDialogGeoJson, setShapeDialogGeoJson] = useState<Record<string, unknown> | null>(null);
+  const [shapeDialogBadgeLabel, setShapeDialogBadgeLabel] = useState<string | undefined>(undefined);
+  const [shapeDialogEmptyMessage, setShapeDialogEmptyMessage] = useState<string | undefined>(undefined);
   const [fieldDialogOpen, setFieldDialogOpen] = useState(false);
   const [selectedField, setSelectedField] = useState<Field | undefined>(undefined);
   const [selectedPropertyIdForField, setSelectedPropertyIdForField] = useState<string | undefined>(undefined);
@@ -82,6 +88,25 @@ export default function Locations() {
     setFieldDialogOpen(true);
   };
 
+  const handleOpenShape = (propertyId: string) => {
+    const property = properties.find((p) => p.id === propertyId);
+    setShapeDialogTitle(property?.name || "Property Shape");
+    setShapeDialogGeoJson((property?.boundaryGeoJson as Record<string, unknown> | null) ?? null);
+    setShapeDialogBadgeLabel(property?.isLeased === "yes" ? "Leased" : undefined);
+    setShapeDialogEmptyMessage("This property does not have a boundary GeoJSON yet. Edit the property and paste a polygon to view it here.");
+    setShapeDialogOpen(true);
+  };
+
+  const handleOpenFieldShape = (fieldId: string) => {
+    const field = fields.find((f) => f.id === fieldId);
+    const property = properties.find((p) => p.id === field?.propertyId);
+    setShapeDialogTitle(property ? `${property.name} - ${field?.name || "Field"}` : field?.name || "Field Shape");
+    setShapeDialogGeoJson((field?.boundaryGeoJson as Record<string, unknown> | null) ?? null);
+    setShapeDialogBadgeLabel("Field");
+    setShapeDialogEmptyMessage("This field does not have a boundary GeoJSON yet. Edit the field and paste a polygon to view it here.");
+    setShapeDialogOpen(true);
+  };
+
   const handleEditField = (fieldId: string) => {
     const field = fields.find(f => f.id === fieldId);
     setSelectedField(field);
@@ -124,6 +149,8 @@ export default function Locations() {
             onEditProperty={handleEditProperty}
             onEditField={handleEditField}
             onDeleteField={handleDeleteField}
+            onOpenShape={handleOpenShape}
+            onOpenFieldShape={handleOpenFieldShape}
           />
         ))}
       </div>
@@ -139,6 +166,15 @@ export default function Locations() {
         onOpenChange={setFieldDialogOpen}
         propertyId={selectedPropertyIdForField}
         field={selectedField}
+      />
+
+      <PropertyShapeDialog
+        open={shapeDialogOpen}
+        onOpenChange={setShapeDialogOpen}
+        title={shapeDialogTitle}
+        boundaryGeoJson={shapeDialogGeoJson}
+        badgeLabel={shapeDialogBadgeLabel}
+        emptyMessage={shapeDialogEmptyMessage}
       />
     </div>
   );
