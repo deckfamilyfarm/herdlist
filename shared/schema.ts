@@ -605,6 +605,15 @@ export const resetPasswordSchema = z.object({
  * ========================= */
 
 export type Animal = typeof animals.$inferSelect;
+export type AnimalDueDateStatus = "normal" | "overdue-struck";
+export type AnimalListItem = Animal & {
+  currentFieldName?: string | null;
+  currentLocation?: string;
+  sireTagNumber?: string | null;
+  damTagNumber?: string | null;
+  dueDate: string | null;
+  dueDateStatus: AnimalDueDateStatus | null;
+};
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 
 export type Property = typeof properties.$inferSelect;

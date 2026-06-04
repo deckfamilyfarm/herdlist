@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { Animal, PolledStatus } from "@shared/schema";
+import type { Animal, AnimalDueDateStatus, PolledStatus } from "@shared/schema";
 
 const normalizePolledStatus = (value: any): PolledStatus => {
   if (value === "polled" || value === "horned" || value === "not tested") return value;
@@ -37,8 +37,16 @@ const polledRank: Record<PolledStatus, number> = {
   "not tested": 2,
 };
 
+type TableAnimal = Animal & {
+  currentLocation?: string;
+  sireTagNumber?: string | null;
+  damTagNumber?: string | null;
+  dueDate?: string | null;
+  dueDateStatus?: AnimalDueDateStatus | null;
+};
+
 interface AnimalTableProps {
-  animals: (Animal & { currentLocation?: string })[];
+  animals: TableAnimal[];
   onView?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
@@ -46,6 +54,14 @@ interface AnimalTableProps {
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
 }
+
+const dateOnlyToTime = (value: string | null | undefined) => {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map((part) => parseInt(part, 10));
+  if (!year || !month || !day) return null;
+  const time = Date.UTC(year, month - 1, day);
+  return Number.isNaN(time) ? null : time;
+};
 
 export function AnimalTable({
   animals,
@@ -68,10 +84,22 @@ export function AnimalTable({
     return "bg-muted text-foreground";
   };
 
-  const formatDate = (value: Animal["dateOfBirth"]) => {
+  const formatDate = (value: Animal["dateOfBirth"] | string | null | undefined) => {
     if (!value) return "-";
     const str = value instanceof Date ? value.toISOString() : String(value);
     return str.includes("T") ? str.split("T")[0] : str;
+  };
+
+  const renderDueDate = (animal: TableAnimal) => {
+    if (!animal.dueDate) return "-";
+
+    return (
+      <span
+        className={animal.dueDateStatus === "overdue-struck" ? "line-through text-muted-foreground" : undefined}
+      >
+        {formatDate(animal.dueDate)}
+      </span>
+    );
   };
 
   type SortKey =
@@ -80,6 +108,7 @@ export function AnimalTable({
     | "type"
     | "sex"
     | "dateOfBirth"
+    | "dueDate"
     | "currentLocation"
     | "sireTagNumber"
     | "damTagNumber"
@@ -114,7 +143,18 @@ export function AnimalTable({
   const sortedAnimals = useMemo(() => {
     return [...animals].sort((a, b) => {
       const dir = sort.dir === "asc" ? 1 : -1;
-      const getVal = (animal: Animal & { currentLocation?: string }) => {
+
+      if (sort.key === "dueDate") {
+        const va = dateOnlyToTime(a.dueDate);
+        const vb = dateOnlyToTime(b.dueDate);
+
+        if (va === null && vb === null) return 0;
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        return (va - vb) * dir;
+      }
+
+      const getVal = (animal: TableAnimal) => {
         switch (sort.key) {
           case "tagNumber":
             return animal.tagNumber.toLowerCase();
@@ -127,9 +167,9 @@ export function AnimalTable({
           case "currentLocation":
             return (animal.currentLocation || "").toLowerCase();
           case "sireTagNumber":
-            return ((animal as any).sireTagNumber || "").toLowerCase();
+            return (animal.sireTagNumber || "").toLowerCase();
           case "damTagNumber":
-            return ((animal as any).damTagNumber || "").toLowerCase();
+            return (animal.damTagNumber || "").toLowerCase();
           case "betacasein":
             return (animal as any).betacasein || "";
           case "polled":
@@ -167,6 +207,9 @@ export function AnimalTable({
             <TableHead data-testid="button-sort-dob">
               {renderSortButton("Date of Birth", "dateOfBirth")}
             </TableHead>
+            <TableHead data-testid="button-sort-due-date">
+              {renderSortButton("Due Date", "dueDate")}
+            </TableHead>
             <TableHead className="hidden md:table-cell">{renderSortButton("Location", "currentLocation")}</TableHead>
             <TableHead className="hidden md:table-cell">{renderSortButton("Sire", "sireTagNumber")}</TableHead>
             <TableHead className="hidden md:table-cell">{renderSortButton("Dam", "damTagNumber")}</TableHead>
@@ -180,7 +223,7 @@ export function AnimalTable({
         <TableBody>
           {sortedAnimals.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={14} className="text-center text-muted-foreground">
+              <TableCell colSpan={15} className="text-center text-muted-foreground">
                 No animals found
               </TableCell>
             </TableRow>
@@ -211,6 +254,7 @@ export function AnimalTable({
               </TableCell>
               <TableCell className="capitalize">{animal.sex}</TableCell>
               <TableCell className="font-readable-mono">{formatDate(animal.dateOfBirth)}</TableCell>
+              <TableCell className="font-readable-mono">{renderDueDate(animal)}</TableCell>
               <TableCell className="hidden md:table-cell">{animal.currentLocation || "-"}</TableCell>
                 <TableCell className="hidden md:table-cell font-readable-mono">
                   {(animal as any).sireTagNumber ? (

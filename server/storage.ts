@@ -16,6 +16,8 @@ import {
   notes,
   breedingRecords,
   type Animal,
+  type AnimalDueDateStatus,
+  type AnimalListItem,
   type InsertAnimal,
   type Property,
   type InsertProperty,
@@ -68,6 +70,72 @@ const normalizePolledStatus = (value: any): PolledStatus => {
   }
 
   return "not tested";
+};
+
+const formatDateOnly = (date: Date) => {
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getUTCDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const toDateOnlyString = (value: unknown): string | null => {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : formatDateOnly(value);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const datePart = raw.includes("T") ? raw.split("T")[0] : raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+    return datePart;
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : formatDateOnly(parsed);
+};
+
+const parseDateOnly = (value: unknown): Date | null => {
+  const dateOnly = toDateOnlyString(value);
+  if (!dateOnly) return null;
+
+  const [year, month, day] = dateOnly.split("-").map((part) => parseInt(part, 10));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+};
+
+const addDateOnlyDays = (date: Date, days: number) => {
+  const next = new Date(date.getTime());
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+};
+
+const addDateOnlyMonths = (date: Date, months: number) => {
+  const firstOfTargetMonth = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1),
+  );
+  const targetYear = firstOfTargetMonth.getUTCFullYear();
+  const targetMonth = firstOfTargetMonth.getUTCMonth();
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+
+  return new Date(
+    Date.UTC(targetYear, targetMonth, Math.min(date.getUTCDate(), lastDayOfTargetMonth)),
+  );
+};
+
+const getTodayDateOnly = () => {
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 };
 
 const resolveSlaughterRecordType = (
@@ -166,7 +234,7 @@ const setAnimalRemovalStatus = async (
 export interface IStorage {
   // Animals
   createAnimal(animal: InsertAnimal): Promise<Animal>;
-  getAllAnimals(): Promise<Animal[]>;
+  getAllAnimals(): Promise<AnimalListItem[]>;
   getAnimalById(id: string): Promise<Animal | undefined>;
   updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined>;
   deleteAnimal(id: string): Promise<void>;
@@ -299,43 +367,137 @@ export class DatabaseStorage implements IStorage {
     return { ...(created as any), polled: normalizePolledStatus((created as any).polled) } as Animal;
   }
 
-  async getAllAnimals(): Promise<Animal[]> {
-  const sireAnimals = alias(animals, "sire_animals");
-  const damAnimals = alias(animals, "dam_animals");
+  async getAllAnimals(): Promise<AnimalListItem[]> {
+    const sireAnimals = alias(animals, "sire_animals");
+    const damAnimals = alias(animals, "dam_animals");
 
-  const result = await db
-    .select({
-      id: animals.id,
-      tagNumber: animals.tagNumber,
-      type: animals.type,
-      sex: animals.sex,
-      dateOfBirth: animals.dateOfBirth,
-      status: animals.status,
-      sireId: animals.sireId,
-      damId: animals.damId,
-      currentFieldId: animals.currentFieldId,
-      herdName: animals.herdName,
-      createdAt: animals.createdAt,
-      phenotype: animals.phenotype,
-      organic: animals.organic,
-      polled: animals.polled,
-      tags: animals.tags,
-      betacasein: animals.betacasein,
-      currentFieldName: fields.name,
-      sireTagNumber: sireAnimals.tagNumber,
-      damTagNumber: damAnimals.tagNumber,
-    })
-    .from(animals)
-    .leftJoin(fields, eq(animals.currentFieldId, fields.id))
-    .leftJoin(sireAnimals, eq(animals.sireId, sireAnimals.id))
-    .leftJoin(damAnimals, eq(animals.damId, damAnimals.id));
+    const [result, breedingRows, calvingRows] = await Promise.all([
+      db
+        .select({
+          id: animals.id,
+          tagNumber: animals.tagNumber,
+          type: animals.type,
+          sex: animals.sex,
+          dateOfBirth: animals.dateOfBirth,
+          status: animals.status,
+          sireId: animals.sireId,
+          damId: animals.damId,
+          currentFieldId: animals.currentFieldId,
+          herdName: animals.herdName,
+          createdAt: animals.createdAt,
+          phenotype: animals.phenotype,
+          organic: animals.organic,
+          polled: animals.polled,
+          tags: animals.tags,
+          betacasein: animals.betacasein,
+          currentFieldName: fields.name,
+          sireTagNumber: sireAnimals.tagNumber,
+          damTagNumber: damAnimals.tagNumber,
+        })
+        .from(animals)
+        .leftJoin(fields, eq(animals.currentFieldId, fields.id))
+        .leftJoin(sireAnimals, eq(animals.sireId, sireAnimals.id))
+        .leftJoin(damAnimals, eq(animals.damId, damAnimals.id)),
+      db
+        .select({
+          animalId: breedingRecords.animalId,
+          breedingDate: breedingRecords.breedingDate,
+          exposureStartDate: breedingRecords.exposureStartDate,
+          createdAt: breedingRecords.createdAt,
+        })
+        .from(breedingRecords),
+      db
+        .select({
+          damId: calvingRecords.damId,
+          calvingDate: calvingRecords.calvingDate,
+        })
+        .from(calvingRecords),
+    ]);
 
-  return result.map((animal) => ({
-    ...(animal as any),
-    tags: (animal as any).tags ?? [],
-    polled: normalizePolledStatus((animal as any).polled),
-  })) as Animal[];
-}
+    const calvingDatesByDamId = new Map<string, Date[]>();
+    for (const row of calvingRows) {
+      const calvingDate = parseDateOnly(row.calvingDate);
+      if (!calvingDate) continue;
+
+      const existing = calvingDatesByDamId.get(row.damId) ?? [];
+      existing.push(calvingDate);
+      calvingDatesByDamId.set(row.damId, existing);
+    }
+
+    const breedingDatesByAnimalId = new Map<
+      string,
+      { firstExposureDate: Date; createdAtTime: number }[]
+    >();
+
+    for (const row of breedingRows) {
+      const firstExposureDate = parseDateOnly(row.exposureStartDate ?? row.breedingDate);
+      if (!firstExposureDate) continue;
+
+      const createdAtTime =
+        row.createdAt instanceof Date
+          ? row.createdAt.getTime()
+          : new Date(row.createdAt as any).getTime();
+      const existing = breedingDatesByAnimalId.get(row.animalId) ?? [];
+      existing.push({
+        firstExposureDate,
+        createdAtTime: Number.isNaN(createdAtTime) ? 0 : createdAtTime,
+      });
+      breedingDatesByAnimalId.set(row.animalId, existing);
+    }
+
+    Array.from(breedingDatesByAnimalId.values()).forEach((breedingDates) => {
+      breedingDates.sort((a, b) => {
+        const byExposure = b.firstExposureDate.getTime() - a.firstExposureDate.getTime();
+        return byExposure !== 0 ? byExposure : b.createdAtTime - a.createdAtTime;
+      });
+    });
+
+    const today = getTodayDateOnly();
+
+    const getDueDateInfo = (
+      animalId: string,
+      sex: string,
+    ): { dueDate: string | null; dueDateStatus: AnimalDueDateStatus | null } => {
+      const normalizedSex = sex.trim().toLowerCase();
+      if (normalizedSex !== "cow" && normalizedSex !== "female") {
+        return { dueDate: null, dueDateStatus: null };
+      }
+
+      const breedingDates = breedingDatesByAnimalId.get(animalId) ?? [];
+      const calvingDates = calvingDatesByDamId.get(animalId) ?? [];
+
+      for (const breedingDate of breedingDates) {
+        const exposureTime = breedingDate.firstExposureDate.getTime();
+        const hasLaterCalving = calvingDates.some(
+          (calvingDate) => calvingDate.getTime() > exposureTime,
+        );
+        if (hasLaterCalving) continue;
+
+        const dueDate = addDateOnlyDays(breedingDate.firstExposureDate, 283);
+        const normalThrough = addDateOnlyMonths(dueDate, 2);
+        const displayThrough = addDateOnlyMonths(dueDate, 6);
+
+        if (today.getTime() > displayThrough.getTime()) {
+          return { dueDate: null, dueDateStatus: null };
+        }
+
+        return {
+          dueDate: formatDateOnly(dueDate),
+          dueDateStatus:
+            today.getTime() > normalThrough.getTime() ? "overdue-struck" : "normal",
+        };
+      }
+
+      return { dueDate: null, dueDateStatus: null };
+    };
+
+    return result.map((animal) => ({
+      ...(animal as any),
+      tags: (animal as any).tags ?? [],
+      polled: normalizePolledStatus((animal as any).polled),
+      ...getDueDateInfo(animal.id, animal.sex),
+    })) as AnimalListItem[];
+  }
 
   async getAnimalById(id: string): Promise<Animal | undefined> {
     const [animal] = await db.select().from(animals).where(eq(animals.id, id));
