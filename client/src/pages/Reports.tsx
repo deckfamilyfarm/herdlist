@@ -628,7 +628,7 @@ export default function Reports() {
       normalizedHerdName === "yearling" ||
       normalizedAnimalTags.some((tag) => tag.includes("heifer"));
     const isFemaleType = normalizedSex === "cow" || normalizedSex === "female";
-    const isBullType = normalizedSex === "bull";
+    const isBullType = normalizedSex === "bull" || normalizedHerdName === "bull";
     const isSteerType =
       normalizedSex === "steer" ||
       normalizedSex === "stag" ||
@@ -655,6 +655,7 @@ export default function Reports() {
 
     if (normalizedType === "dairy") {
       if (isUnderCalfBenchmark) return "Dairy Herd / Dairy calves";
+      if (isBullType) return "Beef Herd / Beef bulls";
       if (isFemaleType && (hasReplacementSignal || hasHeiferSignal)) {
         return "Dairy Herd / Dairy replacement heifers";
       }
