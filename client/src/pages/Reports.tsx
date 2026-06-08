@@ -58,7 +58,7 @@ const FSA_CATEGORY_ORDER = new Map([
   ["Beef Herd / Beef bulls", 2],
   ["Beef Herd / Replacement heifers", 3],
   ["Beef Herd / Steers/heifers over 500 lb", 4],
-  ["Beef Herd / Calves under 500 lb", 5],
+  ["Beef Herd / Un-weaned calves under 500 lbs", 5],
   ["Dairy Herd / Dairy cows", 6],
   ["Dairy Herd / Dairy replacement heifers", 7],
   ["Dairy Herd / Dairy calves", 8],
@@ -628,11 +628,12 @@ export default function Reports() {
       normalizedHerdName === "yearling" ||
       normalizedAnimalTags.some((tag) => tag.includes("heifer"));
     const isFemaleType = normalizedSex === "cow" || normalizedSex === "female";
-    const isBullType = normalizedSex === "bull" || normalizedSex === "male";
+    const isBullType = normalizedSex === "bull";
     const isSteerType =
       normalizedSex === "steer" ||
       normalizedSex === "stag" ||
-      normalizedSex === "freemartin";
+      normalizedSex === "freemartin" ||
+      normalizedSex === "male";
     const dob = toUtcDay(animal.dateOfBirth);
     const ageDays = dob
       ? Math.floor((reportAsOfDay.getTime() - dob.getTime()) / MS_PER_DAY)
@@ -641,7 +642,7 @@ export default function Reports() {
       ageDays !== null && ageDays >= 0 && ageDays < FSA_CALF_MAX_AGE_DAYS;
 
     if (normalizedType === "beef") {
-      if (isUnderCalfBenchmark) return "Beef Herd / Calves under 500 lb";
+      if (isUnderCalfBenchmark) return "Beef Herd / Un-weaned calves under 500 lbs";
       if (isBullType) return "Beef Herd / Beef bulls";
       if (isFemaleType && (hasReplacementSignal || hasHeiferSignal)) {
         return "Beef Herd / Replacement heifers";
@@ -658,6 +659,7 @@ export default function Reports() {
         return "Dairy Herd / Dairy replacement heifers";
       }
       if (isFemaleType) return "Dairy Herd / Dairy cows";
+      if (isSteerType) return "Beef Herd / Steers/heifers over 500 lb";
     }
 
     return "Other / Unclassified";
