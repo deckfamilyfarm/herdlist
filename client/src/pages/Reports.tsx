@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
-import type { Animal, Field, Property, AnimalStatus, Movement, SlaughterRecord } from "@shared/schema";
-import type { AnimalTypeFilter, ReportGrouping, StatusFilter } from "@/components/ReportFilters";
+import type { AnimalListItem, Field, Property, AnimalStatus, Movement, SlaughterRecord } from "@shared/schema";
+import type { AnimalTypeFilter, DueDateFilter, ReportGrouping, StatusFilter } from "@/components/ReportFilters";
 
 interface PropertyCount {
   property: string; // display name
@@ -115,12 +115,26 @@ const normalizeTags = (tags: unknown): string[] => {
   if (Array.isArray(tags)) {
     return tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean);
   }
+  if (typeof tags === "string") {
+    try {
+      const parsed = JSON.parse(tags);
+      if (Array.isArray(parsed)) {
+        return parsed.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean);
+      }
+    } catch {
+      // Fall back to delimited legacy strings.
+    }
+    return tags
+      .split(/[,;]/)
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean);
+  }
   return [];
 };
 
 export default function Reports() {
   // ---- Load real data ----
-  const { data: animals = [], isLoading: animalsLoading } = useQuery<Animal[]>({
+  const { data: animals = [], isLoading: animalsLoading } = useQuery<AnimalListItem[]>({
     queryKey: ["/api/animals"],
   });
 
@@ -154,6 +168,8 @@ export default function Reports() {
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
   const [reportGrouping, setReportGrouping] = useState<ReportGrouping>("field");
   const [excludeAi, setExcludeAi] = useState(true);
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>("all");
   const [grazingType, setGrazingType] = useState<GrazingTypeFilter>("all_dairy_beef");
   const [excludeWet, setExcludeWet] = useState(defaultGrazingFilters.excludeWet);
   const [excludeMissingDob, setExcludeMissingDob] = useState(defaultGrazingFilters.excludeMissingDob);
@@ -201,6 +217,22 @@ export default function Reports() {
         }
       }
 
+      // Tags filter
+      if (selectedTags.size > 0) {
+        const animalTags = normalizeTags((animal as any).tags);
+        if (!animalTags.some((tag) => selectedTags.has(tag))) {
+          return false;
+        }
+      }
+
+      // Due date filter
+      if (dueDateFilter === "cow_has_due_date") {
+        const normalizedSex = String(animal.sex ?? "").trim().toLowerCase();
+        if ((normalizedSex !== "cow" && normalizedSex !== "female") || !animal.dueDate) {
+          return false;
+        }
+      }
+
       // As of Date filter – treat as "include animals born on or before this date"
       if (asOfDate) {
         const dob = (animal.dateOfBirth as any as string | null) || null;
@@ -212,7 +244,7 @@ export default function Reports() {
 
       return true;
     });
-  }, [animals, fields, animalType, status, selectedFieldIds, asOfDate, excludeAi]);
+  }, [animals, animalType, status, selectedFieldIds, selectedTags, dueDateFilter, asOfDate, excludeAi]);
 
   // ---- Herd summary from filtered animals ----
   const {
@@ -326,9 +358,37 @@ export default function Reports() {
         ? "Type"
         : "FSA category";
     const excludeAiLabel = excludeAi ? "Yes" : "No";
+    const tagsLabel =
+      selectedTags.size === 0
+        ? "All tags"
+        : Array.from(selectedTags)
+            .sort((a, b) => a.localeCompare(b))
+            .map((tag) => tag.charAt(0).toUpperCase() + tag.slice(1))
+            .join(", ");
+    const dueDateLabel = dueDateFilter === "cow_has_due_date" ? "Cow has due date" : "All due dates";
 
-    return { typeLabel, statusLabel, asOfLabel, fieldsLabel, groupingLabel, excludeAiLabel };
-  }, [animalType, status, asOfDate, selectedFieldIds, fieldById, propertyById, reportGrouping, excludeAi]);
+    return {
+      typeLabel,
+      statusLabel,
+      asOfLabel,
+      fieldsLabel,
+      groupingLabel,
+      excludeAiLabel,
+      tagsLabel,
+      dueDateLabel,
+    };
+  }, [
+    animalType,
+    status,
+    asOfDate,
+    selectedFieldIds,
+    selectedTags,
+    dueDateFilter,
+    fieldById,
+    propertyById,
+    reportGrouping,
+    excludeAi,
+  ]);
 
   const grazingReport = useMemo(() => {
     const reportEnd = toUtcDay(asOfDate || new Date()) ?? toUtcDay(new Date())!;
@@ -558,7 +618,7 @@ export default function Reports() {
     return `${mNum} mo`;
   };
 
-  const getFsaCategory = (animal: Animal) => {
+  const getFsaCategory = (animal: AnimalListItem) => {
     const normalizedType = String(animal.type ?? "").trim().toLowerCase();
     const normalizedSex = String(animal.sex ?? "").trim().toLowerCase();
     const normalizedHerdName = String((animal as any).herdName ?? "").trim().toLowerCase();
@@ -603,7 +663,7 @@ export default function Reports() {
     return "Other / Unclassified";
   };
 
-  const getReportGroup = (animal: Animal) => {
+  const getReportGroup = (animal: AnimalListItem) => {
     if (reportGrouping === "none") {
       return {
         key: "all",
@@ -666,10 +726,10 @@ export default function Reports() {
     };
   };
 
-  const buildReportGroups = (items: Animal[]) => {
+  const buildReportGroups = (items: AnimalListItem[]) => {
     const grouped = new Map<
       string,
-      { key: string; label: string; sortKey: string; animals: Animal[] }
+      { key: string; label: string; sortKey: string; animals: AnimalListItem[] }
     >();
 
     items.forEach((animal) => {
@@ -703,6 +763,7 @@ export default function Reports() {
       "phenotype",
       "type",
       "date_of_birth",
+      "due_date",
       "age",
       "organic",
       "note",
@@ -722,6 +783,7 @@ export default function Reports() {
           `"${phenotype}"`,
           animal.type,
           dobValue,
+          animal.dueDate || "",
           `"${age}"`,
           animal.organic ? "OTCO" : "Natural",
           "", // note placeholder
@@ -799,6 +861,14 @@ export default function Reports() {
       return raw ? raw.split("T")[0] : "";
     };
 
+    const formatDueDate = (animal: AnimalListItem) => {
+      if (!animal.dueDate) return "";
+      const dueDate = escapeHtml(animal.dueDate);
+      return animal.dueDateStatus === "overdue-struck"
+        ? `<span style="text-decoration: line-through;">${dueDate}</span>`
+        : dueDate;
+    };
+
     const groupEntries = buildReportGroups(sortedAnimals);
 
     const sectionsHtml = groupEntries
@@ -821,6 +891,7 @@ export default function Reports() {
                 <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${escapeHtml(animal.sex || "")}</td>
                 <td class="wrap-cell" style="border:1px solid #ccc;padding:2px;">${escapeHtml(noteText)}</td>
                 <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${formatDob(dob)}</td>
+                <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${formatDueDate(animal)}</td>
                 <td class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;">${months || ""}</td>
                 <td class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;">${animal.organic ? "OTCO" : "Natural"}</td>
                 <td class="nowrap" style="border:1px solid #ccc;padding:2px;">${escapeHtml(damSire)}</td>
@@ -841,10 +912,11 @@ export default function Reports() {
               <thead>
                 <tr>
                   <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:8%;">Tag Number</th>
-                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:12%;">Phenotype</th>
-                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:6%;">Sex</th>
-                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:26%;">Notes</th>
-                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:8%;">DOB</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:11%;">Phenotype</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:5%;">Sex</th>
+                  <th class="wrap-cell" style="border:1px solid #ccc;padding:2px;text-align:left;width:23%;">Notes</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:7%;">DOB</th>
+                  <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:8%;">Due Date</th>
                   <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;width:6%;">Age (Months)</th>
                   <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:center;width:6%;">Organic</th>
                   <th class="nowrap" style="border:1px solid #ccc;padding:2px;text-align:left;width:10%;">Dam / Sire</th>
@@ -876,6 +948,10 @@ export default function Reports() {
         <strong>Grouping:</strong> ${filterSummary.groupingLabel}
         &nbsp;&nbsp;|&nbsp;&nbsp;
         <strong>Exclude AI:</strong> ${filterSummary.excludeAiLabel}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>Tags:</strong> ${filterSummary.tagsLabel}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>Due Date:</strong> ${filterSummary.dueDateLabel}
       </div>
     `;
 
@@ -939,6 +1015,10 @@ export default function Reports() {
         fields={fields}
         selectedFieldIds={selectedFieldIds}
         onSelectedFieldIdsChange={setSelectedFieldIds}
+        selectedTags={selectedTags}
+        onSelectedTagsChange={setSelectedTags}
+        dueDateFilter={dueDateFilter}
+        onDueDateFilterChange={setDueDateFilter}
         onExportCsv={handleDownloadReportCsv}
         onExportPdf={handleDownloadReportPdf}
         onGenerate={undefined} // optional, everything is live-updating already
@@ -948,13 +1028,15 @@ export default function Reports() {
         <CardHeader>
           <CardTitle>Applied Filters</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 text-sm">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-2 text-sm">
           <div><span className="text-muted-foreground">As of:</span> {filterSummary.asOfLabel}</div>
           <div><span className="text-muted-foreground">Type:</span> {filterSummary.typeLabel}</div>
           <div><span className="text-muted-foreground">Status:</span> {filterSummary.statusLabel}</div>
           <div><span className="text-muted-foreground">Fields:</span> {filterSummary.fieldsLabel}</div>
           <div><span className="text-muted-foreground">Grouping:</span> {filterSummary.groupingLabel}</div>
           <div><span className="text-muted-foreground">Exclude AI:</span> {filterSummary.excludeAiLabel}</div>
+          <div><span className="text-muted-foreground">Tags:</span> {filterSummary.tagsLabel}</div>
+          <div><span className="text-muted-foreground">Due Date:</span> {filterSummary.dueDateLabel}</div>
         </CardContent>
       </Card>
 

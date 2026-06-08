@@ -21,11 +21,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { FileDown } from "lucide-react";
 import type { AnimalStatus, Field, Property } from "@shared/schema";
-import { animalStatusEnum } from "@shared/schema";
+import { animalStatusEnum, animalTagOptions } from "@shared/schema";
 
 export type AnimalTypeFilter = "all" | "dairy" | "beef" | "ai";
 export type StatusFilter = "all" | AnimalStatus;
 export type ReportGrouping = "none" | "field" | "type" | "fsa";
+export type DueDateFilter = "all" | "cow_has_due_date";
 
 interface ReportFiltersProps {
   asOfDate: string;
@@ -40,6 +41,12 @@ interface ReportFiltersProps {
   fields: Field[];
   selectedFieldIds: Set<string>;
   onSelectedFieldIdsChange: (value: Set<string>) => void;
+
+  selectedTags: Set<string>;
+  onSelectedTagsChange: (value: Set<string>) => void;
+
+  dueDateFilter: DueDateFilter;
+  onDueDateFilterChange: (value: DueDateFilter) => void;
 
   status: StatusFilter;
   onStatusChange: (value: StatusFilter) => void;
@@ -67,6 +74,10 @@ export function ReportFilters({
   fields,
   selectedFieldIds,
   onSelectedFieldIdsChange,
+  selectedTags,
+  onSelectedTagsChange,
+  dueDateFilter,
+  onDueDateFilterChange,
   status,
   onStatusChange,
   grouping,
@@ -86,6 +97,18 @@ export function ReportFilters({
         (() => {
           const next = new Set(selectedFieldIds);
           next.has(fieldId) ? next.delete(fieldId) : next.add(fieldId);
+          return next;
+        })(),
+      ),
+    );
+  };
+
+  const toggleTag = (tag: string) => {
+    onSelectedTagsChange(
+      new Set(
+        (() => {
+          const next = new Set(selectedTags);
+          next.has(tag) ? next.delete(tag) : next.add(tag);
           return next;
         })(),
       ),
@@ -254,6 +277,68 @@ export function ReportFilters({
                     {s.charAt(0).toUpperCase() + s.slice(1)}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Tags */}
+          <div className="space-y-2">
+            <Label htmlFor="report-tags">Tags</Label>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  id="report-tags"
+                  variant="outline"
+                  className="w-full justify-between"
+                  data-testid="dropdown-report-tags"
+                >
+                  {selectedTags.size === 0 ? "All tags" : `${selectedTags.size} selected`}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+                <DropdownMenuLabel>Tags</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    onSelectedTagsChange(new Set());
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <Checkbox checked={selectedTags.size === 0} className="pointer-events-none" />
+                  All tags
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {animalTagOptions.map((tag) => (
+                  <DropdownMenuItem
+                    key={tag}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      toggleTag(tag);
+                    }}
+                    className="flex items-center gap-2"
+                    data-testid={`checkbox-report-tag-${tag}`}
+                  >
+                    <Checkbox checked={selectedTags.has(tag)} className="pointer-events-none" />
+                    <span className="capitalize">{tag}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Due date */}
+          <div className="space-y-2">
+            <Label htmlFor="due-date-filter">Due Date</Label>
+            <Select
+              value={dueDateFilter}
+              onValueChange={(value) => onDueDateFilterChange(value as DueDateFilter)}
+            >
+              <SelectTrigger id="due-date-filter" data-testid="select-report-due-date">
+                <SelectValue placeholder="All due dates" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All due dates</SelectItem>
+                <SelectItem value="cow_has_due_date">Cow has due date</SelectItem>
               </SelectContent>
             </Select>
           </div>

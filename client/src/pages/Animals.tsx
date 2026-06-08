@@ -29,6 +29,7 @@ import {
   polledStatusEnum,
   animalTagOptions,
   type Animal,
+  type AnimalListItem,
   type AnimalStatus,
   type Field,
   type Property,
@@ -78,7 +79,7 @@ export default function Animals() {
   const [betacaseinFilter, setBetacaseinFilter] = useState<BetacaseinFilter>("all");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
-  const { data: animals = [], isLoading } = useQuery<Animal[]>({
+  const { data: animals = [], isLoading } = useQuery<AnimalListItem[]>({
     queryKey: ["/api/animals"],
   });
 
@@ -858,7 +859,7 @@ export default function Animals() {
         </div>
       ) : (
         <AnimalTable
-          animals={displayAnimals as Animal[]}
+          animals={displayAnimals}
           onView={handleViewAnimal}
           onEdit={handleEditAnimal}
           onDelete={handleDeleteAnimal}
