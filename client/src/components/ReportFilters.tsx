@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { FileDown } from "lucide-react";
 import type { AnimalStatus, Field, Property } from "@shared/schema";
@@ -24,6 +25,7 @@ import { animalStatusEnum } from "@shared/schema";
 
 export type AnimalTypeFilter = "all" | "dairy" | "beef" | "ai";
 export type StatusFilter = "all" | AnimalStatus;
+export type ReportGrouping = "none" | "field" | "type" | "fsa";
 
 interface ReportFiltersProps {
   asOfDate: string;
@@ -41,6 +43,12 @@ interface ReportFiltersProps {
 
   status: StatusFilter;
   onStatusChange: (value: StatusFilter) => void;
+
+  grouping: ReportGrouping;
+  onGroupingChange: (value: ReportGrouping) => void;
+
+  excludeAi: boolean;
+  onExcludeAiChange: (value: boolean) => void;
 
   properties: Property[];
 
@@ -61,6 +69,10 @@ export function ReportFilters({
   onSelectedFieldIdsChange,
   status,
   onStatusChange,
+  grouping,
+  onGroupingChange,
+  excludeAi,
+  onExcludeAiChange,
   properties,
   onGenerate,
   onExportCsv,
@@ -244,6 +256,76 @@ export function ReportFilters({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        </div>
+
+        <div className="space-y-3 border-t pt-4">
+          <div className="text-sm font-medium">Report Options</div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Group by</div>
+              <RadioGroup
+                value={grouping}
+                onValueChange={(value) =>
+                  onGroupingChange(value as ReportGrouping)
+                }
+                className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem
+                    id="report-grouping-none"
+                    value="none"
+                    data-testid="radio-report-grouping-none"
+                  />
+                  <Label htmlFor="report-grouping-none" className="cursor-pointer font-normal">
+                    No grouping
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem
+                    id="report-grouping-field"
+                    value="field"
+                    data-testid="radio-report-grouping-field"
+                  />
+                  <Label htmlFor="report-grouping-field" className="cursor-pointer font-normal">
+                    Group by field
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem
+                    id="report-grouping-type"
+                    value="type"
+                    data-testid="radio-report-grouping-type"
+                  />
+                  <Label htmlFor="report-grouping-type" className="cursor-pointer font-normal">
+                    Group by Type
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem
+                    id="report-grouping-fsa"
+                    value="fsa"
+                    data-testid="radio-report-grouping-fsa"
+                  />
+                  <Label htmlFor="report-grouping-fsa" className="cursor-pointer font-normal">
+                    FSA category
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                <Checkbox
+                  checked={excludeAi}
+                  onCheckedChange={(checked) =>
+                    onExcludeAiChange(checked === true)
+                  }
+                  data-testid="checkbox-report-exclude-ai"
+                />
+                Exclude AI
+              </label>
+            </div>
           </div>
         </div>
 

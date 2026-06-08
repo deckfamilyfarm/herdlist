@@ -84,15 +84,14 @@ app.use((req, res, next) => {
   }
 
   const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    }
-  );
-})();
+  const host = process.env.HOST || "0.0.0.0";
 
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    log(`failed to start server on ${host}:${port} :: ${err.message}`);
+    process.exit(1);
+  });
+
+  server.listen({ port, host }, () => {
+    log(`serving on ${host}:${port}`);
+  });
+})();

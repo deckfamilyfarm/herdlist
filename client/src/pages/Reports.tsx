@@ -24,7 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import type { Animal, Field, Property, AnimalStatus, Movement, SlaughterRecord } from "@shared/schema";
-import type { AnimalTypeFilter, StatusFilter } from "@/components/ReportFilters";
+import type { AnimalTypeFilter, ReportGrouping, StatusFilter } from "@/components/ReportFilters";
 
 interface PropertyCount {
   property: string; // display name
@@ -52,6 +52,18 @@ interface GrazingMonthRow {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const NO_LOCATION_ID = "__NO_LOCATION__";
+const FSA_CALF_MAX_AGE_DAYS = 205;
+const FSA_CATEGORY_ORDER = new Map([
+  ["Beef Herd / Beef cows", 1],
+  ["Beef Herd / Beef bulls", 2],
+  ["Beef Herd / Replacement heifers", 3],
+  ["Beef Herd / Steers/heifers over 500 lb", 4],
+  ["Beef Herd / Calves under 500 lb", 5],
+  ["Dairy Herd / Dairy cows", 6],
+  ["Dairy Herd / Dairy replacement heifers", 7],
+  ["Dairy Herd / Dairy calves", 8],
+  ["Other / Unclassified", 99],
+]);
 const defaultGrazingFilters = {
   excludeWet: true,
   excludeMissingDob: false,
@@ -140,6 +152,8 @@ export default function Reports() {
   const [animalType, setAnimalType] = useState<AnimalTypeFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("active");
   const [selectedFieldIds, setSelectedFieldIds] = useState<Set<string>>(new Set());
+  const [reportGrouping, setReportGrouping] = useState<ReportGrouping>("field");
+  const [excludeAi, setExcludeAi] = useState(true);
   const [grazingType, setGrazingType] = useState<GrazingTypeFilter>("all_dairy_beef");
   const [excludeWet, setExcludeWet] = useState(defaultGrazingFilters.excludeWet);
   const [excludeMissingDob, setExcludeMissingDob] = useState(defaultGrazingFilters.excludeMissingDob);
@@ -149,14 +163,24 @@ export default function Reports() {
 
   const fieldById = useMemo(() => new Map(fields.map((f) => [f.id, f])), [fields]);
   const propertyById = useMemo(() => new Map(properties.map((p) => [p.id, p])), [properties]);
+  const reportAsOfDay = useMemo(
+    () => toUtcDay(asOfDate || new Date()) ?? toUtcDay(new Date())!,
+    [asOfDate],
+  );
 
   // ---- Apply filters to animals ----
   const filteredAnimals = useMemo(() => {
     if (animals.length === 0) return [];
 
     return animals.filter((animal) => {
+      const normalizedType = String(animal.type ?? "").trim().toLowerCase();
+
+      if (excludeAi && normalizedType === "ai") {
+        return false;
+      }
+
       // Type filter
-      if (animalType !== "all" && animal.type !== animalType) {
+      if (animalType !== "all" && normalizedType !== animalType) {
         return false;
       }
 
@@ -188,7 +212,7 @@ export default function Reports() {
 
       return true;
     });
-  }, [animals, fields, animalType, status, selectedFieldIds, asOfDate]);
+  }, [animals, fields, animalType, status, selectedFieldIds, asOfDate, excludeAi]);
 
   // ---- Herd summary from filtered animals ----
   const {
@@ -293,9 +317,18 @@ export default function Reports() {
     }
     const fieldsLabel =
       selectedFieldIds.size === 0 ? "All fields" : fieldLabels.sort((a, b) => a.localeCompare(b)).join("; ");
+    const groupingLabel =
+      reportGrouping === "none"
+        ? "No grouping"
+        : reportGrouping === "field"
+        ? "Field"
+        : reportGrouping === "type"
+        ? "Type"
+        : "FSA category";
+    const excludeAiLabel = excludeAi ? "Yes" : "No";
 
-    return { typeLabel, statusLabel, asOfLabel, fieldsLabel };
-  }, [animalType, status, asOfDate, selectedFieldIds, fieldById, propertyById]);
+    return { typeLabel, statusLabel, asOfLabel, fieldsLabel, groupingLabel, excludeAiLabel };
+  }, [animalType, status, asOfDate, selectedFieldIds, fieldById, propertyById, reportGrouping, excludeAi]);
 
   const grazingReport = useMemo(() => {
     const reportEnd = toUtcDay(asOfDate || new Date()) ?? toUtcDay(new Date())!;
@@ -525,31 +558,177 @@ export default function Reports() {
     return `${mNum} mo`;
   };
 
+  const getFsaCategory = (animal: Animal) => {
+    const normalizedType = String(animal.type ?? "").trim().toLowerCase();
+    const normalizedSex = String(animal.sex ?? "").trim().toLowerCase();
+    const normalizedHerdName = String((animal as any).herdName ?? "").trim().toLowerCase();
+    const normalizedAnimalTags = normalizeTags((animal as any).tags);
+    const hasReplacementSignal = normalizedAnimalTags.some((tag) => tag.includes("replacement"));
+    const hasHeiferSignal =
+      normalizedHerdName === "yearling" ||
+      normalizedAnimalTags.some((tag) => tag.includes("heifer"));
+    const isFemaleType = normalizedSex === "cow" || normalizedSex === "female";
+    const isBullType = normalizedSex === "bull" || normalizedSex === "male";
+    const isSteerType =
+      normalizedSex === "steer" ||
+      normalizedSex === "stag" ||
+      normalizedSex === "freemartin";
+    const dob = toUtcDay(animal.dateOfBirth);
+    const ageDays = dob
+      ? Math.floor((reportAsOfDay.getTime() - dob.getTime()) / MS_PER_DAY)
+      : null;
+    const isUnderCalfBenchmark =
+      ageDays !== null && ageDays >= 0 && ageDays < FSA_CALF_MAX_AGE_DAYS;
+
+    if (normalizedType === "beef") {
+      if (isUnderCalfBenchmark) return "Beef Herd / Calves under 500 lb";
+      if (isBullType) return "Beef Herd / Beef bulls";
+      if (isFemaleType && (hasReplacementSignal || hasHeiferSignal)) {
+        return "Beef Herd / Replacement heifers";
+      }
+      if (isFemaleType) return "Beef Herd / Beef cows";
+      if (isSteerType || hasHeiferSignal) {
+        return "Beef Herd / Steers/heifers over 500 lb";
+      }
+    }
+
+    if (normalizedType === "dairy") {
+      if (isUnderCalfBenchmark) return "Dairy Herd / Dairy calves";
+      if (isFemaleType && (hasReplacementSignal || hasHeiferSignal)) {
+        return "Dairy Herd / Dairy replacement heifers";
+      }
+      if (isFemaleType) return "Dairy Herd / Dairy cows";
+    }
+
+    return "Other / Unclassified";
+  };
+
+  const getReportGroup = (animal: Animal) => {
+    if (reportGrouping === "none") {
+      return {
+        key: "all",
+        label: "All Animals",
+        sortKey: "0|All Animals",
+      };
+    }
+
+    if (reportGrouping === "type") {
+      const normalizedType = String(animal.type ?? "").trim().toLowerCase();
+      const typeLabel =
+        normalizedType === "ai"
+          ? "AI"
+          : normalizedType
+          ? normalizedType.charAt(0).toUpperCase() + normalizedType.slice(1)
+          : "Unknown Type";
+      const typeRank =
+        normalizedType === "dairy"
+          ? 1
+          : normalizedType === "beef"
+          ? 2
+          : normalizedType === "ai"
+          ? 3
+          : 4;
+
+      return {
+        key: `type:${normalizedType || "unknown"}`,
+        label: typeLabel,
+        sortKey: `${typeRank}|${typeLabel}`,
+      };
+    }
+
+    if (reportGrouping === "fsa") {
+      const fsaCategory = getFsaCategory(animal);
+      const rank = FSA_CATEGORY_ORDER.get(fsaCategory) ?? 99;
+
+      return {
+        key: `fsa:${fsaCategory}`,
+        label: fsaCategory,
+        sortKey: `${String(rank).padStart(2, "0")}|${fsaCategory}`,
+      };
+    }
+
+    const cfId = (animal as any).currentFieldId || animal.currentFieldId || NO_LOCATION_ID;
+    const field = cfId !== NO_LOCATION_ID ? fieldById.get(cfId as string) : undefined;
+    const property = field ? propertyById.get(field.propertyId as string) : undefined;
+    const fieldLabel = field
+      ? property
+        ? `${property.name} / ${field.name}`
+        : field.name
+      : "No location";
+    const sortKey = field
+      ? `${property?.name ?? ""}|${field.name}`
+      : "zzzz|No location";
+
+    return {
+      key: `field:${cfId}`,
+      label: fieldLabel,
+      sortKey,
+    };
+  };
+
+  const buildReportGroups = (items: Animal[]) => {
+    const grouped = new Map<
+      string,
+      { key: string; label: string; sortKey: string; animals: Animal[] }
+    >();
+
+    items.forEach((animal) => {
+      const group = getReportGroup(animal);
+      const existing = grouped.get(group.key);
+      if (existing) {
+        existing.animals.push(animal);
+      } else {
+        grouped.set(group.key, { ...group, animals: [animal] });
+      }
+    });
+
+    return Array.from(grouped.values())
+      .map((group) => ({
+        ...group,
+        animals: [...group.animals].sort((a, b) => a.tagNumber.localeCompare(b.tagNumber)),
+      }))
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  };
+
   // ---- CSV download based on filtered data ----
   const handleDownloadReportCsv = () => {
-    const sortedAnimals = [...filteredAnimals].sort((a, b) =>
-      a.tagNumber.localeCompare(b.tagNumber),
-    );
+    const reportGroups = buildReportGroups(filteredAnimals);
+    const includeGroupColumn = reportGrouping !== "none";
 
     const lines: string[] = [];
 
-    lines.push("tag_number,phenotype,type,date_of_birth,age,organic,note,noteDate");
-    sortedAnimals.forEach((animal) => {
-      const dob = (animal.dateOfBirth as any as string) || "";
-      const age = formatAge(dob || null);
-      const dobValue = dob ? dob.split("T")[0] : "";
-      const phenotype = (animal.phenotype || "").replace(/\"/g, '""');
-      const row = [
-        `"${animal.tagNumber.replace(/\"/g, '""')}"`,
-        `"${phenotype}"`,
-        animal.type,
-        dobValue,
-        `"${age}"`,
-        animal.organic ? "OTCO" : "Natural",
-        "", // note placeholder
-        filterSummary.asOfLabel, // default noteDate (today or as-of date)
-      ];
-      lines.push(row.join(","));
+    const header = [
+      ...(includeGroupColumn ? ["group"] : []),
+      "tag_number",
+      "phenotype",
+      "type",
+      "date_of_birth",
+      "age",
+      "organic",
+      "note",
+      "noteDate",
+    ];
+
+    lines.push(header.join(","));
+    reportGroups.forEach((group) => {
+      group.animals.forEach((animal) => {
+        const dob = (animal.dateOfBirth as any as string) || "";
+        const age = formatAge(dob || null);
+        const dobValue = dob ? dob.split("T")[0] : "";
+        const phenotype = (animal.phenotype || "").replace(/\"/g, '""');
+        const row = [
+          ...(includeGroupColumn ? [`"${group.label.replace(/\"/g, '""')}"`] : []),
+          `"${animal.tagNumber.replace(/\"/g, '""')}"`,
+          `"${phenotype}"`,
+          animal.type,
+          dobValue,
+          `"${age}"`,
+          animal.organic ? "OTCO" : "Natural",
+          "", // note placeholder
+          filterSummary.asOfLabel, // default noteDate (today or as-of date)
+        ];
+        lines.push(row.join(","));
+      });
     });
 
     const csvContent = lines.join("\n");
@@ -620,33 +799,10 @@ export default function Reports() {
       return raw ? raw.split("T")[0] : "";
     };
 
-    const grouped = new Map<string, Animal[]>();
-    sortedAnimals.forEach((animal) => {
-      const key = (animal as any).currentFieldId || animal.currentFieldId || NO_LOCATION_ID;
-      if (!grouped.has(key as string)) grouped.set(key as string, []);
-      grouped.get(key as string)!.push(animal);
-    });
-
-    const groupEntries = Array.from(grouped.entries())
-      .map(([fieldId, animalsInField]) => {
-        const field = fieldById.get(fieldId);
-        const property = field ? propertyById.get(field.propertyId as string) : undefined;
-        return {
-          fieldId,
-          fieldName: field?.name || "No location",
-          propertyName: property?.name || "",
-          animals: [...animalsInField].sort((a, b) => a.tagNumber.localeCompare(b.tagNumber)),
-        };
-      })
-      .sort((a, b) => {
-        if (a.fieldId === NO_LOCATION_ID) return 1;
-        if (b.fieldId === NO_LOCATION_ID) return -1;
-        if (a.propertyName !== b.propertyName) return a.propertyName.localeCompare(b.propertyName);
-        return a.fieldName.localeCompare(b.fieldName);
-      });
+    const groupEntries = buildReportGroups(sortedAnimals);
 
     const sectionsHtml = groupEntries
-      .map((group, index) => {
+      .map((group) => {
         const rows = group.animals
           .map((animal) => {
             const dob = (animal.dateOfBirth as any as string) || "";
@@ -675,13 +831,11 @@ export default function Reports() {
           })
           .join("");
 
-        const heading = group.propertyName
-          ? `${escapeHtml(group.propertyName)} / ${escapeHtml(group.fieldName)}`
-          : escapeHtml(group.fieldName);
+        const heading = escapeHtml(group.label);
         return `
-          <div class="field-section" style="page-break-inside: avoid; break-inside: avoid-page; page-break-after: auto;">
+          <div class="field-section">
             <h3 style="margin:0 0 6px 0;">
-              ${heading} <span style="font-weight:normal;">(Animals in field: ${group.animals.length})</span>
+              ${heading} <span style="font-weight:normal;">(Animals: ${group.animals.length})</span>
             </h3>
             <table style="border-collapse: collapse; width: 100%; font-size: 10px; line-height: 1.05; table-layout: fixed; margin-top:6px; margin-bottom:12px;">
               <thead>
@@ -718,6 +872,10 @@ export default function Reports() {
         <strong>Status:</strong> ${filterSummary.statusLabel}
         &nbsp;&nbsp;|&nbsp;&nbsp;
         <strong>Fields:</strong> ${filterSummary.fieldsLabel}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>Grouping:</strong> ${filterSummary.groupingLabel}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>Exclude AI:</strong> ${filterSummary.excludeAiLabel}
       </div>
     `;
 
@@ -729,8 +887,10 @@ export default function Reports() {
             @page { size: landscape; margin: 6mm; }
             body, table { font-family: "Roboto", sans-serif; }
             thead { display: table-header-group; }
-            tr { page-break-inside: avoid; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
             th, td { vertical-align: top; }
+            .field-section { break-inside: auto; page-break-inside: auto; margin-bottom: 12px; }
+            .field-section h3 { break-after: avoid; page-break-after: avoid; }
             .nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .wrap-cell { white-space: normal; word-break: break-word; }
           </style>
@@ -771,6 +931,10 @@ export default function Reports() {
         onPropertyIdChange={() => {}}
         status={status}
         onStatusChange={setStatus}
+        grouping={reportGrouping}
+        onGroupingChange={setReportGrouping}
+        excludeAi={excludeAi}
+        onExcludeAiChange={setExcludeAi}
         properties={properties}
         fields={fields}
         selectedFieldIds={selectedFieldIds}
@@ -784,11 +948,13 @@ export default function Reports() {
         <CardHeader>
           <CardTitle>Applied Filters</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 text-sm">
           <div><span className="text-muted-foreground">As of:</span> {filterSummary.asOfLabel}</div>
           <div><span className="text-muted-foreground">Type:</span> {filterSummary.typeLabel}</div>
           <div><span className="text-muted-foreground">Status:</span> {filterSummary.statusLabel}</div>
           <div><span className="text-muted-foreground">Fields:</span> {filterSummary.fieldsLabel}</div>
+          <div><span className="text-muted-foreground">Grouping:</span> {filterSummary.groupingLabel}</div>
+          <div><span className="text-muted-foreground">Exclude AI:</span> {filterSummary.excludeAiLabel}</div>
         </CardContent>
       </Card>
 
