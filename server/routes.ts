@@ -169,6 +169,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/auth/timesheets-launch', (_req, res) => {
+    res.json({
+      ok: true,
+      message: "Timesheets launch endpoint is available. Launch from Timesheets with a POST request.",
+      method: "POST",
+    });
+  });
+
   app.post('/api/auth/timesheets-launch', async (req: any, res) => {
     const returnTo = sanitizeReturnTo(req.body?.return_to);
     const origin = req.get("origin");

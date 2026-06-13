@@ -5,6 +5,16 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+app.use((req, res, next) => {
+  try {
+    decodeURIComponent(req.url.split("?")[0]);
+    next();
+  } catch {
+    res.status(400).send("Bad request");
+  }
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
