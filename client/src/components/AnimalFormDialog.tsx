@@ -57,6 +57,19 @@ const polledOptions: PolledStatus[] = [
 ] as PolledStatus[];
 
 const tagOptions = animalTagOptions;
+const MIN_ANIMAL_DOB_YEAR = 2000;
+const MIN_ANIMAL_DOB = `${MIN_ANIMAL_DOB_YEAR}-01-01`;
+
+const getCurrentYear = () => new Date().getFullYear();
+const getMaxAnimalDob = () => `${getCurrentYear()}-12-31`;
+
+const isAllowedAnimalDobYear = (value: string) => {
+  if (!value) return true;
+  const match = /^(\d{4})-\d{2}-\d{2}$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  return year >= MIN_ANIMAL_DOB_YEAR && year <= getCurrentYear();
+};
 
 export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: AnimalFormDialogProps) {
   const { toast } = useToast();
@@ -209,6 +222,15 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
 
  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAllowedAnimalDobYear(formData.dateOfBirth)) {
+      toast({
+        title: "Invalid date of birth",
+        description: `Date of birth must be between ${MIN_ANIMAL_DOB_YEAR} and ${getCurrentYear()}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const submitData: InsertAnimal = {
       tagNumber: formData.tagNumber,
       type: formData.type,
@@ -283,6 +305,8 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
             <Input
               id="dateOfBirth"
               type="date"
+              min={MIN_ANIMAL_DOB}
+              max={getMaxAnimalDob()}
               value={formData.dateOfBirth}
               onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
               data-testid="input-date-of-birth"

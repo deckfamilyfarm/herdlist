@@ -9,6 +9,7 @@ import { useState } from "react";
 import { AnimalFormDialog } from "@/components/AnimalFormDialog";
 import { useQuery } from "@tanstack/react-query";
 import type { Animal } from "@shared/schema";
+import { useLocation } from "wouter";
 
 interface DashboardStats {
   totalAnimals: number;
@@ -37,6 +38,7 @@ interface Movement {
 
 export default function Dashboard() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [, setLocation] = useLocation();
 
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ['/api/dashboard/stats'],
@@ -123,7 +125,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <HerdCompositionChart data={sortedFieldCounts} />
+          <HerdCompositionChart
+            data={sortedFieldCounts}
+            onFieldClick={(fieldId) => setLocation(`/animals?fieldId=${encodeURIComponent(fieldId)}`)}
+          />
         </div>
         <MovementHistoryTimeline movements={recentMovements} />
       </div>

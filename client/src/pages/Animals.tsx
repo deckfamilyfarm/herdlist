@@ -20,10 +20,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useSearch } from "wouter";
 import {
   animalStatusEnum,
   polledStatusEnum,
@@ -56,6 +57,7 @@ const normalizePolledStatus = (value: any): PolledStatus => {
 
 export default function Animals() {
   const { toast } = useToast();
+  const search = useSearch();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
@@ -90,6 +92,26 @@ export default function Animals() {
   const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ['/api/properties'],
   });
+
+  const selectedFieldIdFromQuery = new URLSearchParams(search).get("fieldId");
+
+  useEffect(() => {
+    if (selectedFieldIdFromQuery) {
+      setSelectedFieldIds(new Set([selectedFieldIdFromQuery]));
+    }
+  }, [selectedFieldIdFromQuery]);
+
+  const fieldDisplayNameById = useMemo(() => {
+    const propertyNameById = new Map<string, string>();
+    properties.forEach((property) => propertyNameById.set(property.id, property.name));
+
+    const names = new Map<string, string>([[NO_LOCATION_ID, "No location"]]);
+    fields.forEach((field) => {
+      const propertyName = propertyNameById.get(field.propertyId);
+      names.set(field.id, propertyName ? `${propertyName} - ${field.name}` : field.name);
+    });
+    return names;
+  }, [fields, properties]);
 
   const deleteAnimalMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -320,6 +342,15 @@ export default function Animals() {
     };
   });
 
+  const fieldFilterLabel = (() => {
+    if (selectedFieldIds.size === 0) return "All fields";
+    if (selectedFieldIds.size === 1) {
+      const [fieldId] = Array.from(selectedFieldIds);
+      return fieldDisplayNameById.get(fieldId) ?? "1 field selected";
+    }
+    return `${selectedFieldIds.size} fields selected`;
+  })();
+
   useEffect(() => {
     setSelectedIds((prev) => {
       const validIds = new Set(displayAnimals.map((a) => a.id));
@@ -381,9 +412,7 @@ export default function Animals() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="w-full sm:min-w-[180px]" data-testid="dropdown-fields">
-              {selectedFieldIds.size === 0
-                ? "All fields"
-                : `${selectedFieldIds.size} field${selectedFieldIds.size > 1 ? "s" : ""} selected`}
+              {fieldFilterLabel}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-64 max-h-80 overflow-y-auto">

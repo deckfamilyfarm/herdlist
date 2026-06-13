@@ -53,6 +53,11 @@ interface ReportFiltersProps {
 
   grouping: ReportGrouping;
   onGroupingChange: (value: ReportGrouping) => void;
+  groupingSummaries: Array<{
+    key: string;
+    label: string;
+    count: number;
+  }>;
 
   excludeAi: boolean;
   onExcludeAiChange: (value: boolean) => void;
@@ -82,6 +87,7 @@ export function ReportFilters({
   onStatusChange,
   grouping,
   onGroupingChange,
+  groupingSummaries,
   excludeAi,
   onExcludeAiChange,
   properties,
@@ -397,6 +403,26 @@ export function ReportFilters({
                   </Label>
                 </div>
               </RadioGroup>
+              {grouping !== "none" && groupingSummaries.length > 0 ? (
+                <div className="space-y-2 pt-2">
+                  <div className="text-sm font-medium">Grouping Summary</div>
+                  <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2 xl:grid-cols-3">
+                    {groupingSummaries.map((summary) => (
+                      <div
+                        key={summary.key}
+                        className="flex min-w-0 items-baseline justify-between gap-3"
+                      >
+                        <span className="truncate text-muted-foreground">
+                          {summary.label}
+                        </span>
+                        <span className="shrink-0 font-mono text-foreground">
+                          {summary.count}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex items-end pb-1">

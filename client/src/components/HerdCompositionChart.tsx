@@ -14,13 +14,22 @@ interface HerdCompositionChartProps {
   data: FieldCount[];
   title?: string;
   showPropertyLabel?: boolean;
+  onFieldClick?: (fieldId: string) => void;
 }
 
 export function HerdCompositionChart({
   data,
   title = "Number of Animals by Field",
   showPropertyLabel = true,
+  onFieldClick,
 }: HerdCompositionChartProps) {
+  const handleBarClick = (barData: any) => {
+    const fieldId = barData?.payload?.fieldId;
+    if (fieldId && onFieldClick) {
+      onFieldClick(fieldId);
+    }
+  };
+
   const renderFieldTick = (props: any) => {
     const { x, y, payload } = props;
     const entry = data.find((item) => item.fieldId === payload.value);
@@ -77,9 +86,30 @@ export function HerdCompositionChart({
               }}
             />
             <Legend verticalAlign="top" align="right" />
-            <Bar dataKey="dairy" fill="hsl(var(--chart-1))" name="Dairy" stackId="total" />
-            <Bar dataKey="beef" fill="hsl(var(--chart-3))" name="Beef" stackId="total" />
-            <Bar dataKey="ai" fill="hsl(var(--chart-4))" name="AI" stackId="total" />
+            <Bar
+              dataKey="dairy"
+              fill="hsl(var(--chart-1))"
+              name="Dairy"
+              stackId="total"
+              onClick={handleBarClick}
+              cursor={onFieldClick ? "pointer" : undefined}
+            />
+            <Bar
+              dataKey="beef"
+              fill="hsl(var(--chart-3))"
+              name="Beef"
+              stackId="total"
+              onClick={handleBarClick}
+              cursor={onFieldClick ? "pointer" : undefined}
+            />
+            <Bar
+              dataKey="ai"
+              fill="hsl(var(--chart-4))"
+              name="AI"
+              stackId="total"
+              onClick={handleBarClick}
+              cursor={onFieldClick ? "pointer" : undefined}
+            />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function Landing() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -17,7 +17,7 @@ export default function Landing() {
     setIsLoading(true);
 
     try {
-      await apiRequest("POST", "/api/auth/login", { email, password });
+      await apiRequest("POST", "/api/auth/login", { username, password });
 
       // Login successful, reload to trigger app to recognize auth state
       window.location.href = "/";
@@ -44,16 +44,17 @@ export default function Landing() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Timesheets Username</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                placeholder="your.username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
                 disabled={isLoading}
-                data-testid="input-email"
+                autoComplete="username"
+                data-testid="input-username"
               />
             </div>
 
@@ -62,11 +63,12 @@ export default function Landing() {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="********"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                autoComplete="current-password"
                 data-testid="input-password"
               />
             </div>
@@ -82,15 +84,11 @@ export default function Landing() {
             </Button>
           </form>
 
-          <div className="mt-6 space-y-2 text-sm text-muted-foreground">
-            <p className="font-medium">Features:</p>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>Animal breeding and parentage tracking</li>
-              <li>Location tracking across properties</li>
-              <li>Vaccination and health records</li>
-              <li>Movement history</li>
-              <li>Calving and slaughter/sold data</li>
-            </ul>
+          <div className="mt-6 text-sm text-muted-foreground">
+            <p>
+              Please use your Timesheets login to gain access to the Herd
+              Management System.
+            </p>
           </div>
 
         </CardContent>

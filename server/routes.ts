@@ -1,8 +1,18 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import passport from "passport";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated, isAdmin, hashPassword, verifyPassword, generateResetToken, hashResetToken } from "./auth";
+import {
+  setupAuth,
+  isAuthenticated,
+  isAdmin,
+  hashPassword,
+  verifyPassword,
+  generateResetToken,
+  hashResetToken,
+  loginAgainstTimesheets,
+  authenticateTimesheetsAccessToken,
+  isTimesheetsLaunchOriginAllowed,
+} from "./auth";
 import {
   insertAnimalSchema,
   insertPropertySchema,
@@ -92,6 +102,21 @@ const bulkRemoveTagsSchema = z.object({
   tags: z.array(z.string()).min(1),
 });
 
+function sanitizeReturnTo(value: unknown) {
+  const returnTo = String(value || "/");
+  if (!returnTo.startsWith("/") || returnTo.startsWith("//") || returnTo.includes("\\")) return "/";
+  return returnTo;
+}
+
+function loginUser(req: any, user: any) {
+  return new Promise<void>((resolve, reject) => {
+    req.logIn(user, (err: unknown) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   await setupAuth(app);
@@ -128,34 +153,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/auth/login', (req, res, next) => {
+  app.post('/api/auth/login', async (req: any, res) => {
     try {
       const validated = loginSchema.parse(req.body);
-      
-      passport.authenticate('local', (err: any, user: any, info: any) => {
-        if (err) {
-          console.error("Login error:", err);
-          return res.status(500).json({ message: "Internal server error" });
-        }
-        
-        if (!user) {
-          return res.status(401).json({ message: info?.message || "Invalid credentials" });
-        }
-        
-        req.logIn(user, (err) => {
-          if (err) {
-            console.error("Session error:", err);
-            return res.status(500).json({ message: "Failed to create session" });
-          }
-          
-          res.json(user);
-        });
-      })(req, res, next);
+      const username = validated.username || validated.email || "";
+      const user = await loginAgainstTimesheets(username, validated.password);
+      await loginUser(req, user);
+      res.json(user);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
-      res.status(500).json({ message: "Login failed" });
+      console.error("Login error:", error);
+      res.status(401).json({ message: error.message || "Login failed" });
+    }
+  });
+
+  app.post('/api/auth/timesheets-launch', async (req: any, res) => {
+    const returnTo = sanitizeReturnTo(req.body?.return_to);
+    const origin = req.get("origin");
+
+    if (!isTimesheetsLaunchOriginAllowed(origin)) {
+      console.warn(`Rejected timesheets launch from origin: ${origin}`);
+      return res.status(403).send("Forbidden");
+    }
+
+    try {
+      const accessToken = String(req.body?.access_token || "");
+      const username = String(req.body?.username || "");
+      if (!accessToken) return res.redirect("/");
+
+      const user = await authenticateTimesheetsAccessToken(accessToken, username);
+      await loginUser(req, user);
+      return res.redirect(returnTo);
+    } catch (error) {
+      console.error("Timesheets launch exchange failed:", error);
+      return res.redirect("/");
     }
   });
 

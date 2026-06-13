@@ -47,7 +47,7 @@ const menuItems = [
     icon: Upload,
   },
   {
-    title: "Admin Panel",
+    title: "Access",
     url: "/admin",
     icon: Shield,
   },

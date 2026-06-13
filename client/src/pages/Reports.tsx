@@ -61,7 +61,7 @@ const FSA_CATEGORY_ORDER = new Map([
   ["Beef Herd / Un-weaned calves under 500 lbs", 5],
   ["Dairy Herd / Dairy cows", 6],
   ["Dairy Herd / Dairy replacement heifers", 7],
-  ["Dairy Herd / Dairy calves", 8],
+  ["Dairy Herd / Un-weaned dairy calves under 500 lbs", 8],
   ["Other / Unclassified", 99],
 ]);
 const defaultGrazingFilters = {
@@ -654,7 +654,7 @@ export default function Reports() {
     }
 
     if (normalizedType === "dairy") {
-      if (isUnderCalfBenchmark) return "Dairy Herd / Dairy calves";
+      if (isUnderCalfBenchmark) return "Dairy Herd / Un-weaned dairy calves under 500 lbs";
       if (isBullType) return "Beef Herd / Beef bulls";
       if (isFemaleType && (hasReplacementSignal || hasHeiferSignal)) {
         return "Dairy Herd / Dairy replacement heifers";
@@ -753,6 +753,15 @@ export default function Reports() {
       .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   };
 
+  const reportGroupSummaries =
+    reportGrouping === "none"
+      ? []
+      : buildReportGroups(filteredAnimals).map((group) => ({
+          key: group.key,
+          label: group.label,
+          count: group.animals.length,
+        }));
+
   // ---- CSV download based on filtered data ----
   const handleDownloadReportCsv = () => {
     const reportGroups = buildReportGroups(filteredAnimals);
@@ -765,6 +774,7 @@ export default function Reports() {
       "tag_number",
       "phenotype",
       "type",
+      "sex",
       "date_of_birth",
       "due_date",
       "age",
@@ -785,6 +795,7 @@ export default function Reports() {
           `"${animal.tagNumber.replace(/\"/g, '""')}"`,
           `"${phenotype}"`,
           animal.type,
+          animal.sex,
           dobValue,
           animal.dueDate || "",
           `"${age}"`,
@@ -1012,6 +1023,7 @@ export default function Reports() {
         onStatusChange={setStatus}
         grouping={reportGrouping}
         onGroupingChange={setReportGrouping}
+        groupingSummaries={reportGroupSummaries}
         excludeAi={excludeAi}
         onExcludeAiChange={setExcludeAi}
         properties={properties}

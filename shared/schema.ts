@@ -51,6 +51,53 @@ const dateOnlyOptional = z
     return null;
   });
 
+const MIN_ANIMAL_DOB_YEAR = 2000;
+
+const validateAnimalDateOfBirth = (
+  value: string | null,
+  ctx: z.RefinementCtx,
+) => {
+  if (!value) return;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Date of birth must be a valid date.",
+    });
+    return;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  const isValidDate =
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day;
+
+  if (!isValidDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Date of birth must be a valid date.",
+    });
+    return;
+  }
+
+  const currentYear = new Date().getFullYear();
+  if (year < MIN_ANIMAL_DOB_YEAR || year > currentYear) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Date of birth must be between ${MIN_ANIMAL_DOB_YEAR} and ${currentYear}.`,
+    });
+  }
+};
+
+const animalDateOfBirth = dateOnlyOptional.superRefine(
+  validateAnimalDateOfBirth,
+);
+
 /* =========================
  * Shared enums / types
  * ========================= */
@@ -292,7 +339,7 @@ export const users = mysqlTable("users", {
 
 export const insertAnimalSchema = createInsertSchema(animals, {
   // DATE column -> normalized YYYY-MM-DD string
-  dateOfBirth: dateOnlyOptional,
+  dateOfBirth: animalDateOfBirth,
   polled: z
     .any()
     .optional()
@@ -461,7 +508,7 @@ export const csvAnimalSchema = z.object({
     .enum(["cow", "steer", "stag", "bull", "freemartin"])
     .or(z.enum(["male", "female"])) // legacy values
     .or(z.literal("")),
-  dateOfBirth: z.string().optional(),
+  dateOfBirth: animalDateOfBirth.optional(),
   sireId: z.string().optional(),
   damId: z.string().optional(),
   currentFieldId: z.string().optional(),
@@ -582,8 +629,12 @@ export const signupSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  username: z.string().min(1).optional(),
+  email: z.string().min(1).optional(),
   password: z.string(),
+}).refine((value) => value.username || value.email, {
+  message: "Username is required",
+  path: ["username"],
 });
 
 export const changePasswordSchema = z.object({
