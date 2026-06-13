@@ -84,6 +84,9 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     currentFieldName?: string | null; 
     sireTagNumber?: string | null; 
     damTagNumber?: string | null; 
+    dueDate?: string | null;
+    dueDateStatus?: string | null;
+    dueDateBreedingRecordId?: string | null;
   };
 
   const formatDate = (value: Animal["dateOfBirth"]) => {
@@ -203,6 +206,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/breeding/animal', animal.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
       setBreedingForm({
         method: "observed_live_cover",
         breedingDate: new Date().toISOString().split("T")[0],
@@ -221,6 +225,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/breeding/animal', animal.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
     },
   });
 
@@ -233,6 +238,11 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     `${Math.floor((new Date().getTime() - new Date(animal.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years` : 
     'Unknown';
   const normalizedTags = normalizeTags((animal as any).tags);
+  const dueDateText = enrichedAnimal.dueDate
+    ? enrichedAnimal.dueDate.includes("T")
+      ? enrichedAnimal.dueDate.split("T")[0]
+      : enrichedAnimal.dueDate
+    : null;
   const formatTypeLabel = (type: string) => {
     const normalizedType = type.trim().toLowerCase();
     return normalizedType === "ai" ? "AI" : type;
@@ -300,6 +310,39 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date of Birth</span>
                     <span className="font-medium">{formatDate(animal.dateOfBirth)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-muted-foreground">Due Date</span>
+                    <div className="flex items-center justify-end gap-2">
+                      <span
+                        className={
+                          enrichedAnimal.dueDateStatus === "overdue-struck"
+                            ? "font-medium line-through text-muted-foreground"
+                            : "font-medium"
+                        }
+                      >
+                        {dueDateText || "Not due"}
+                      </span>
+                      {enrichedAnimal.dueDateBreedingRecordId ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                "Clear this due date? This removes the breeding record that created it.",
+                              )
+                            ) {
+                              deleteBreedingMutation.mutate(enrichedAnimal.dueDateBreedingRecordId!);
+                            }
+                          }}
+                          disabled={deleteBreedingMutation.isPending}
+                          data-testid="button-clear-due-date"
+                        >
+                          Clear
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Current Location</span>

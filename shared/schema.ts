@@ -664,6 +664,7 @@ export type AnimalListItem = Animal & {
   damTagNumber?: string | null;
   dueDate: string | null;
   dueDateStatus: AnimalDueDateStatus | null;
+  dueDateBreedingRecordId: string | null;
 };
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 

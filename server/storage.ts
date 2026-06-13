@@ -400,6 +400,7 @@ export class DatabaseStorage implements IStorage {
         .leftJoin(damAnimals, eq(animals.damId, damAnimals.id)),
       db
         .select({
+          id: breedingRecords.id,
           animalId: breedingRecords.animalId,
           breedingDate: breedingRecords.breedingDate,
           exposureStartDate: breedingRecords.exposureStartDate,
@@ -415,18 +416,27 @@ export class DatabaseStorage implements IStorage {
     ]);
 
     const calvingDatesByDamId = new Map<string, Date[]>();
-    for (const row of calvingRows) {
-      const calvingDate = parseDateOnly(row.calvingDate);
-      if (!calvingDate) continue;
+    const addCalvingDate = (damId: string | null | undefined, calvingDateValue: unknown) => {
+      if (!damId) return;
+      const calvingDate = parseDateOnly(calvingDateValue);
+      if (!calvingDate) return;
 
-      const existing = calvingDatesByDamId.get(row.damId) ?? [];
+      const existing = calvingDatesByDamId.get(damId) ?? [];
       existing.push(calvingDate);
-      calvingDatesByDamId.set(row.damId, existing);
+      calvingDatesByDamId.set(damId, existing);
+    };
+
+    for (const row of calvingRows) {
+      addCalvingDate(row.damId, row.calvingDate);
+    }
+
+    for (const animal of result) {
+      addCalvingDate(animal.damId, animal.dateOfBirth);
     }
 
     const breedingDatesByAnimalId = new Map<
       string,
-      { firstExposureDate: Date; createdAtTime: number }[]
+      { id: string; firstExposureDate: Date; createdAtTime: number }[]
     >();
 
     for (const row of breedingRows) {
@@ -439,6 +449,7 @@ export class DatabaseStorage implements IStorage {
           : new Date(row.createdAt as any).getTime();
       const existing = breedingDatesByAnimalId.get(row.animalId) ?? [];
       existing.push({
+        id: row.id,
         firstExposureDate,
         createdAtTime: Number.isNaN(createdAtTime) ? 0 : createdAtTime,
       });
@@ -457,10 +468,14 @@ export class DatabaseStorage implements IStorage {
     const getDueDateInfo = (
       animalId: string,
       sex: string,
-    ): { dueDate: string | null; dueDateStatus: AnimalDueDateStatus | null } => {
+    ): {
+      dueDate: string | null;
+      dueDateStatus: AnimalDueDateStatus | null;
+      dueDateBreedingRecordId: string | null;
+    } => {
       const normalizedSex = sex.trim().toLowerCase();
       if (normalizedSex !== "cow" && normalizedSex !== "female") {
-        return { dueDate: null, dueDateStatus: null };
+        return { dueDate: null, dueDateStatus: null, dueDateBreedingRecordId: null };
       }
 
       const breedingDates = breedingDatesByAnimalId.get(animalId) ?? [];
@@ -478,17 +493,18 @@ export class DatabaseStorage implements IStorage {
         const displayThrough = addDateOnlyMonths(dueDate, 6);
 
         if (today.getTime() > displayThrough.getTime()) {
-          return { dueDate: null, dueDateStatus: null };
+          return { dueDate: null, dueDateStatus: null, dueDateBreedingRecordId: null };
         }
 
         return {
           dueDate: formatDateOnly(dueDate),
           dueDateStatus:
             today.getTime() > normalThrough.getTime() ? "overdue-struck" : "normal",
+          dueDateBreedingRecordId: breedingDate.id,
         };
       }
 
-      return { dueDate: null, dueDateStatus: null };
+      return { dueDate: null, dueDateStatus: null, dueDateBreedingRecordId: null };
     };
 
     return result.map((animal) => ({
