@@ -6,10 +6,31 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
+const REMOTE_TIMESHEETS_URL = (import.meta.env.VITE_TIMESHEETS_URL || "https://timesheets.deckfamilyfarm.com").replace(/\/+$/, "");
+const LOCAL_TIMESHEETS_URL = (import.meta.env.VITE_LOCAL_TIMESHEETS_URL || "http://localhost:3000").replace(/\/+$/, "");
+
+function getTimesheetsLoginUrl(username: string) {
+  const isLocal =
+    typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const baseUrl = isLocal ? LOCAL_TIMESHEETS_URL : REMOTE_TIMESHEETS_URL;
+  const returnTo =
+    typeof window === "undefined"
+      ? "/"
+      : `${window.location.pathname || "/"}${window.location.search || ""}${window.location.hash || ""}`;
+  const url = new URL("/", baseUrl);
+  url.searchParams.set("launch_app", "herdlist");
+  url.searchParams.set("return_to", returnTo.startsWith("/") ? returnTo : "/");
+  url.searchParams.set("username", username);
+  url.searchParams.set("auth_hint", "passkey");
+  url.searchParams.set("launch_nonce", String(Date.now()));
+  return url.toString();
+}
+
 export default function Landing() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPasskeyRedirecting, setIsPasskeyRedirecting] = useState(false);
   const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -32,6 +53,21 @@ export default function Landing() {
     }
   };
 
+  const handlePasskeyLogin = () => {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
+      toast({
+        title: "Username Required",
+        description: "Enter your Timesheets username before using a passkey.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsPasskeyRedirecting(true);
+    window.location.assign(getTimesheetsLoginUrl(trimmedUsername));
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen p-4">
       <Card className="w-full max-w-md">
@@ -52,7 +88,7 @@ export default function Landing() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isLoading || isPasskeyRedirecting}
                 autoComplete="username"
                 data-testid="input-username"
               />
@@ -67,7 +103,7 @@ export default function Landing() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={isLoading || isPasskeyRedirecting}
                 autoComplete="current-password"
                 data-testid="input-password"
               />
@@ -77,10 +113,21 @@ export default function Landing() {
               type="submit"
               className="w-full"
               size="lg"
-              disabled={isLoading}
+              disabled={isLoading || isPasskeyRedirecting}
               data-testid="button-login"
             >
               {isLoading ? "Signing in..." : "Sign In"}
+            </Button>
+            <Button
+              type="button"
+              className="w-full"
+              size="lg"
+              variant="outline"
+              disabled={isLoading || isPasskeyRedirecting}
+              onClick={handlePasskeyLogin}
+              data-testid="button-passkey-login"
+            >
+              {isPasskeyRedirecting ? "Opening Timesheets..." : "Sign in with Timesheets passkey"}
             </Button>
           </form>
 
