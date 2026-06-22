@@ -14,6 +14,7 @@ import {
 import { Home, List, MapPin, Upload, BarChart3, Scale, LogOut, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
 
 const menuItems = [
   {
@@ -54,8 +55,9 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
+  const queryClient = useQueryClient();
 
   const handleLogout = async () => {
     try {
@@ -70,8 +72,11 @@ export function AppSidebar() {
       console.error("Logout error:", err);
       // even if logout fails, we still want to dump the user back to the entry screen
     } finally {
-      // Your login screen is at "/", not "/login"
-      window.location.href = "/";
+      queryClient.removeQueries({
+        predicate: ({ queryKey }) => queryKey[0] !== "/api/auth/user",
+      });
+      queryClient.setQueryData(["/api/auth/user"], null);
+      setLocation("/");
     }
   };
 
