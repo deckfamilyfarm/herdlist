@@ -113,6 +113,12 @@ export const animalStatusEnum = [
 export type AnimalStatus = (typeof animalStatusEnum)[number];
 export const slaughterRecordTypeEnum = ["slaughtered", "sold"] as const;
 export type SlaughterRecordType = (typeof slaughterRecordTypeEnum)[number];
+export const hayTypeEnum = ["balage", "dry_hay"] as const;
+export type HayType = (typeof hayTypeEnum)[number];
+export const amendmentTypeEnum = ["reseeding", "manure", "lime"] as const;
+export type AmendmentType = (typeof amendmentTypeEnum)[number];
+export const manureSpreaderTypeEnum = ["vertical_beater", "horizontal_beater"] as const;
+export type ManureSpreaderType = (typeof manureSpreaderTypeEnum)[number];
 
 // Polled status enum (replaces boolean)
 export const polledStatusEnum = ["polled", "horned", "not tested"] as const;
@@ -194,6 +200,7 @@ export const properties = mysqlTable("properties", {
   leaseStartDate: date("lease_start_date"),
   leaseEndDate: date("lease_end_date"),
   leaseholder: varchar("leaseholder", { length: 255 }),
+  leaseRatePerAcre: decimal("lease_rate_per_acre", { precision: 10, scale: 2 }),
   boundaryGeoJson: json("boundary_geojson").$type<Record<string, unknown> | null>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -205,8 +212,43 @@ export const fields = mysqlTable("fields", {
   name: varchar("name", { length: 255 }).notNull(),
   propertyId: varchar("property_id", { length: 36 }).notNull(),
   capacity: int("capacity"),
-  acres: int("acres"),
+  acres: decimal("acres", { precision: 10, scale: 2 }),
+  certifiedOrganic: boolean("certified_organic").default(false),
   boundaryGeoJson: json("boundary_geojson").$type<Record<string, unknown> | null>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const hayRecords = mysqlTable("hay_records", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  fieldId: varchar("field_id", { length: 36 }).notNull(),
+  hayType: mysqlEnum("hay_type", hayTypeEnum).notNull(),
+  balingDate: date("baling_date").notNull(),
+  baleCount: int("bale_count").notNull(),
+  baleWeightLbs: decimal("bale_weight_lbs", { precision: 10, scale: 2 }).notNull(),
+  dryMatterPercent: decimal("dry_matter_percent", { precision: 5, scale: 2 }).notNull(),
+  acresCut: decimal("acres_cut", { precision: 10, scale: 2 }).notNull(),
+  storageLocation: varchar("storage_location", { length: 255 }),
+  notes: varchar("notes", { length: 2000 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const fieldAmendmentRecords = mysqlTable("field_amendment_records", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  fieldId: varchar("field_id", { length: 36 }).notNull(),
+  amendmentType: mysqlEnum("amendment_type", amendmentTypeEnum).notNull(),
+  applicationDate: date("application_date").notNull(),
+  acresTreated: decimal("acres_treated", { precision: 10, scale: 2 }).notNull(),
+  notes: varchar("notes", { length: 2000 }),
+  seedNotes: varchar("seed_notes", { length: 2000 }),
+  manureRateYardsPerAcre: decimal("manure_rate_yards_per_acre", { precision: 10, scale: 2 }),
+  manureSource: varchar("manure_source", { length: 255 }),
+  spreaderType: mysqlEnum("spreader_type", manureSpreaderTypeEnum),
+  limeType: varchar("lime_type", { length: 255 }),
+  limeTonsPerAcre: decimal("lime_tons_per_acre", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -367,21 +409,268 @@ export const insertAnimalSchema = createInsertSchema(animals, {
 export const insertPropertySchema = createInsertSchema(properties, {
   leaseStartDate: dateOnlyOptional,
   leaseEndDate: dateOnlyOptional,
+  leaseRatePerAcre: z
+    .union([z.string(), z.number()])
+    .optional()
+    .nullable()
+    .transform((value, ctx) => {
+      if (value === undefined || value === null || value === "") return null;
+
+      const rawValue = typeof value === "number" ? value.toString() : value.trim();
+      if (!rawValue) return null;
+
+      if (!/^\d+(\.\d{1,2})?$/.test(rawValue)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Lease rate must be a non-negative number with up to two decimal places.",
+        });
+        return z.NEVER;
+      }
+
+      const numericValue = Number(rawValue);
+      if (!Number.isFinite(numericValue) || numericValue > 99999999.99) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Lease rate must be less than 100,000,000.",
+        });
+        return z.NEVER;
+      }
+
+      return numericValue.toFixed(2);
+    }),
   boundaryGeoJson: z.record(z.any()).optional().nullable(),
 }).omit({
   id: true,
   createdAt: true,
 });
 
+const optionalAcresSchema = z
+  .union([z.string(), z.number()])
+  .optional()
+  .nullable()
+  .transform((value, ctx) => {
+    if (value === undefined || value === null || value === "") return null;
+
+    const rawValue = typeof value === "number" ? value.toString() : value.trim();
+    if (rawValue === "") return null;
+
+    if (!/^\d+(\.\d{1,2})?$/.test(rawValue)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Acres must be a non-negative number with up to two decimal places.",
+      });
+      return z.NEVER;
+    }
+
+    const numericValue = Number(rawValue);
+    if (!Number.isFinite(numericValue) || numericValue > 99999999.99) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Acres must be less than 100,000,000.",
+      });
+      return z.NEVER;
+    }
+
+    return numericValue.toFixed(2);
+  });
+
+const optionalTextSchema = z
+  .string()
+  .optional()
+  .nullable()
+  .transform((value) => {
+    const trimmed = value?.trim();
+    return trimmed || null;
+  });
+
+const decimalStringSchema = (
+  label: string,
+  options: {
+    precision?: number;
+    scale?: number;
+    min?: number;
+    minExclusive?: boolean;
+    max?: number;
+  } = {},
+) => {
+  const { precision = 10, scale = 2, min, minExclusive = false, max } = options;
+  const decimalPattern = new RegExp(`^\\d+(\\.\\d{1,${scale}})?$`);
+
+  return z.union([z.string(), z.number()]).transform((value, ctx) => {
+    const rawValue = typeof value === "number" ? value.toString() : value.trim();
+    if (!rawValue || !decimalPattern.test(rawValue)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${label} must be a number with up to ${scale} decimal places.`,
+      });
+      return z.NEVER;
+    }
+
+    const numericValue = Number(rawValue);
+    if (!Number.isFinite(numericValue)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${label} must be a valid number.`,
+      });
+      return z.NEVER;
+    }
+
+    if (
+      min !== undefined &&
+      (minExclusive ? numericValue <= min : numericValue < min)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: minExclusive ? `${label} must be greater than ${min}.` : `${label} must be at least ${min}.`,
+      });
+      return z.NEVER;
+    }
+
+    if (max !== undefined && numericValue > max) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${label} must be no more than ${max}.`,
+      });
+      return z.NEVER;
+    }
+
+    const digitsOnly = rawValue.replace(".", "");
+    if (digitsOnly.length > precision) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${label} is too large.`,
+      });
+      return z.NEVER;
+    }
+
+    return numericValue.toFixed(scale);
+  });
+};
+
+const optionalDecimalStringSchema = (
+  label: string,
+  options: Parameters<typeof decimalStringSchema>[1] = {},
+) =>
+  z
+    .union([z.string(), z.number()])
+    .optional()
+    .nullable()
+    .transform((value, ctx) => {
+      if (value === undefined || value === null) return null;
+      if (typeof value === "string" && !value.trim()) return null;
+
+      const parsed = decimalStringSchema(label, options).safeParse(value);
+      if (!parsed.success) {
+        parsed.error.issues.forEach((issue) => ctx.addIssue(issue));
+        return z.NEVER;
+      }
+
+      return parsed.data;
+    });
+
 export const insertFieldSchema = createInsertSchema(fields, {
   // Coerce string from input into number
   capacity: z.coerce.number().int().optional().nullable(),
-  acres: z.coerce.number().int().optional().nullable(),
+  acres: optionalAcresSchema,
+  certifiedOrganic: z.coerce.boolean().optional(),
   boundaryGeoJson: z.record(z.any()).optional().nullable(),
 }).omit({
   id: true,
   createdAt: true,
 });
+
+export const insertHayRecordSchema = createInsertSchema(hayRecords, {
+  balingDate: dateOnlyRequired,
+  baleCount: z.coerce.number().int().positive("Bale count must be greater than 0."),
+  baleWeightLbs: decimalStringSchema("Bale weight", { min: 0, minExclusive: true }),
+  dryMatterPercent: decimalStringSchema("Dry matter percent", { precision: 5, min: 0, max: 100 }),
+  acresCut: decimalStringSchema("Acres cut", { min: 0, minExclusive: true }),
+  storageLocation: optionalTextSchema,
+  notes: optionalTextSchema,
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updateHayRecordSchema = insertHayRecordSchema
+  .omit({ fieldId: true })
+  .partial();
+
+const baseFieldAmendmentRecordSchema = createInsertSchema(fieldAmendmentRecords, {
+  applicationDate: dateOnlyRequired,
+  acresTreated: decimalStringSchema("Acres treated", { min: 0, minExclusive: true }),
+  notes: optionalTextSchema,
+  seedNotes: optionalTextSchema,
+  manureRateYardsPerAcre: optionalDecimalStringSchema("Manure rate", { min: 0, minExclusive: true }),
+  manureSource: optionalTextSchema,
+  limeType: optionalTextSchema,
+  limeTonsPerAcre: optionalDecimalStringSchema("Lime tons per acre", { min: 0, minExclusive: true }),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+const validateFieldAmendmentRecord = (
+  data: z.infer<typeof baseFieldAmendmentRecordSchema>,
+  ctx: z.RefinementCtx,
+) => {
+  if (data.amendmentType === "reseeding" && !data.seedNotes) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Seed notes are required for reseeding records.",
+      path: ["seedNotes"],
+    });
+  }
+
+  if (data.amendmentType === "manure") {
+    if (!data.manureRateYardsPerAcre) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Manure rate is required for manure records.",
+        path: ["manureRateYardsPerAcre"],
+      });
+    }
+    if (!data.manureSource) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Manure source is required for manure records.",
+        path: ["manureSource"],
+      });
+    }
+    if (!data.spreaderType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Spreader type is required for manure records.",
+        path: ["spreaderType"],
+      });
+    }
+  }
+
+  if (data.amendmentType === "lime") {
+    if (!data.limeType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Lime type is required for lime records.",
+        path: ["limeType"],
+      });
+    }
+    if (!data.limeTonsPerAcre) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Lime tons per acre is required for lime records.",
+        path: ["limeTonsPerAcre"],
+      });
+    }
+  }
+};
+
+export const insertFieldAmendmentRecordSchema = baseFieldAmendmentRecordSchema.superRefine(
+  validateFieldAmendmentRecord,
+);
+
+export const updateFieldAmendmentRecordSchema = baseFieldAmendmentRecordSchema
+  .omit({ fieldId: true })
+  .partial();
 
 export const insertMovementSchema = createInsertSchema(movements)
   .omit({
@@ -550,15 +839,30 @@ export const csvPropertySchema = z.object({
   leaseStartDate: z.string().optional(),
   leaseEndDate: z.string().optional(),
   leaseholder: z.string().optional(),
+  leaseRatePerAcre: optionalDecimalStringSchema("Lease rate", { min: 0 }).optional(),
 });
 
 export const csvFieldSchema = z.object({
   name: z.string().min(1),
-  propertyId: z.string().min(1),
+  propertyName: z.string().min(1),
   capacity: z
     .string()
     .optional()
-    .transform((val) => (val ? parseInt(val) : undefined)),
+    .transform((val, ctx) => {
+      if (!val?.trim()) return null;
+
+      const capacity = Number(val);
+      if (!Number.isInteger(capacity)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Capacity must be a whole number.",
+        });
+        return z.NEVER;
+      }
+
+      return capacity;
+    }),
+  acres: optionalAcresSchema,
 });
 
 export const csvVaccinationSchema = z.object({
@@ -673,6 +977,25 @@ export type InsertProperty = z.infer<typeof insertPropertySchema>;
 
 export type Field = typeof fields.$inferSelect;
 export type InsertField = z.infer<typeof insertFieldSchema>;
+
+export type HayRecord = typeof hayRecords.$inferSelect;
+export type InsertHayRecord = z.infer<typeof insertHayRecordSchema>;
+export type HayRecordWithMetrics = HayRecord & {
+  totalDmTons: number;
+  tonDmPerAcre: number | null;
+};
+export type FieldHaySummary = {
+  fieldId: string;
+  year: number;
+  cutCount: number;
+  dryHayBales: number;
+  balageBales: number;
+  totalDmTons: number;
+  tonDmPerAcre: number | null;
+};
+
+export type FieldAmendmentRecord = typeof fieldAmendmentRecords.$inferSelect;
+export type InsertFieldAmendmentRecord = z.infer<typeof insertFieldAmendmentRecordSchema>;
 
 export type InsertMovement = z.infer<typeof insertMovementSchema>;
 export type Movement = typeof movements.$inferSelect;

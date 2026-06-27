@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Calendar, Plus, Edit } from "lucide-react";
+import { MapPin, Calendar, Plus, Edit, Trash2, ClipboardList, ChevronDown, ChevronRight } from "lucide-react";
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -16,7 +17,12 @@ interface Field {
   name: string;
   capacity?: number;
   currentCount: number;
-  acres?: number | null;
+  assignedCount: number;
+  acres?: number | string | null;
+  certifiedOrganic?: boolean | null;
+  haySummary?: {
+    tonDmPerAcre: number | null;
+  };
   boundaryGeoJson?: Record<string, unknown> | null;
 }
 
@@ -27,7 +33,15 @@ interface Property {
   leaseStartDate?: string | Date;
   leaseEndDate?: string | Date;
   leaseholder?: string;
+  leaseRatePerAcre?: number | string | null;
+  leasedAcres?: number;
+  leaseCostPerTonDm?: number | null;
   boundaryGeoJson?: Record<string, unknown> | null;
+  hayTotals?: {
+    dryHayBales: number;
+    balageBales: number;
+    totalDmTons: number;
+  };
   fields: Field[];
 }
 
@@ -35,8 +49,10 @@ interface PropertyWithFieldsProps {
   property: Property;
   onAddField?: (propertyId: string) => void;
   onEditProperty?: (propertyId: string) => void;
+  onDeleteProperty?: (propertyId: string) => void;
   onEditField?: (fieldId: string) => void;
   onDeleteField?: (fieldId: string) => void;
+  onOpenFieldRecords?: (fieldId: string) => void;
   onOpenShape?: (propertyId: string) => void;
   onOpenFieldShape?: (fieldId: string) => void;
 }
@@ -46,17 +62,47 @@ const formatDateDisplay = (value: string | Date | undefined) => {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value;
 };
 
+const formatAcresDisplay = (value: number | string | null | undefined) => {
+  if (value === null || value === undefined || value === "") return "-";
+
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue.toFixed(2) : value;
+};
+
+const formatTonDmPerAcre = (value: number | null | undefined) => {
+  return Number.isFinite(value) ? Number(value).toFixed(2) : "-";
+};
+
+const formatBales = (value: number) => {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+};
+
+const formatCurrency = (value: number | string | null | undefined) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue)
+    ? numericValue.toLocaleString(undefined, { style: "currency", currency: "USD" })
+    : "-";
+};
+
 export function PropertyWithFields({ 
   property, 
   onAddField, 
   onEditProperty,
+  onDeleteProperty,
   onEditField,
   onDeleteField,
+  onOpenFieldRecords,
   onOpenShape,
   onOpenFieldShape,
 }: PropertyWithFieldsProps) {
+  const [fieldsExpanded, setFieldsExpanded] = useState(false);
   const totalAnimals = property.fields.reduce((sum, field) => sum + field.currentCount, 0);
+  const totalAssignedAnimals = property.fields.reduce((sum, field) => sum + field.assignedCount, 0);
   const totalCapacity = property.fields.reduce((sum, field) => sum + (field.capacity || 0), 0);
+  const totalAcres = property.fields.reduce((sum, field) => {
+    const acres = Number(field.acres);
+    return sum + (Number.isFinite(acres) ? acres : 0);
+  }, 0);
 
   return (
     <Card className="transition-colors hover:bg-muted/20" data-testid={`card-property-${property.id}`}>
@@ -91,22 +137,44 @@ export function PropertyWithFields({
             </div>
           )}
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm"
-          onClick={(event) => {
-            event.stopPropagation();
-            onEditProperty?.(property.id);
-          }}
-          data-testid={`button-edit-property-${property.id}`}
-        >
-          <Edit className="h-4 w-4" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEditProperty?.(property.id);
+            }}
+            aria-label={`Edit ${property.name}`}
+            data-testid={`button-edit-property-${property.id}`}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            disabled={totalAssignedAnimals > 0}
+            title={
+              totalAssignedAnimals > 0
+                ? "Move all animals off this property before deleting it."
+                : `Delete ${property.name}`
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteProperty?.(property.id);
+            }}
+            aria-label={`Delete ${property.name}`}
+            data-testid={`button-delete-property-${property.id}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div
-            className="flex cursor-pointer gap-6 text-sm"
+            className="flex flex-wrap cursor-pointer gap-x-6 gap-y-2 text-sm"
             onClick={() => onOpenShape?.(property.id)}
           >
             <div>
@@ -116,11 +184,33 @@ export function PropertyWithFields({
               </p>
             </div>
             <div>
+              <p className="text-muted-foreground">Total Acres</p>
+              <p className="font-semibold text-lg" data-testid={`text-total-acres-${property.id}`}>
+                {formatAcresDisplay(totalAcres)}
+              </p>
+            </div>
+            <div>
               <p className="text-muted-foreground">Total Animals</p>
               <p className="font-semibold text-lg" data-testid={`text-animal-count-${property.id}`}>
                 {totalAnimals}
               </p>
             </div>
+            {(property.hayTotals?.dryHayBales ?? 0) > 0 && (
+              <div>
+                <p className="text-muted-foreground">Total Dry Hay Bales</p>
+                <p className="font-semibold text-lg">
+                  {formatBales(property.hayTotals?.dryHayBales ?? 0)}
+                </p>
+              </div>
+            )}
+            {(property.hayTotals?.balageBales ?? 0) > 0 && (
+              <div>
+                <p className="text-muted-foreground">Total Balage</p>
+                <p className="font-semibold text-lg">
+                  {formatBales(property.hayTotals?.balageBales ?? 0)}
+                </p>
+              </div>
+            )}
             {totalCapacity > 0 && (
               <div>
                 <p className="text-muted-foreground">Capacity</p>
@@ -129,22 +219,51 @@ export function PropertyWithFields({
                 </p>
               </div>
             )}
+            {property.isLeased === "yes" && property.leaseCostPerTonDm !== null && property.leaseCostPerTonDm !== undefined && (
+              <div>
+                <p className="text-muted-foreground">$ / Ton DM</p>
+                <p className="font-semibold text-lg">
+                  {formatCurrency(property.leaseCostPerTonDm)}
+                </p>
+              </div>
+            )}
           </div>
-          <Button 
-            size="sm" 
-            variant="outline"
-            onClick={(event) => {
-              event.stopPropagation();
-              onAddField?.(property.id);
-            }}
-            data-testid={`button-add-field-${property.id}`}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Field
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {property.fields.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setFieldsExpanded((expanded) => !expanded);
+                }}
+                aria-expanded={fieldsExpanded}
+                data-testid={`button-toggle-fields-${property.id}`}
+              >
+                {fieldsExpanded ? (
+                  <ChevronDown className="h-4 w-4 mr-2" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 mr-2" />
+                )}
+                {fieldsExpanded ? "Hide Fields" : `Show Fields (${property.fields.length})`}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(event) => {
+                event.stopPropagation();
+                onAddField?.(property.id);
+              }}
+              data-testid={`button-add-field-${property.id}`}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Field
+            </Button>
+          </div>
         </div>
 
-        {property.fields.length > 0 ? (
+        {fieldsExpanded && property.fields.length > 0 && (
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -153,16 +272,13 @@ export function PropertyWithFields({
                   <TableHead>Animals</TableHead>
                   <TableHead>Capacity</TableHead>
                   <TableHead>Acres</TableHead>
-                  <TableHead>Utilization</TableHead>
+                  <TableHead>Organic</TableHead>
+                  <TableHead>Ton DM/Acre</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {property.fields.map((field) => {
-                  const utilization = field.capacity 
-                    ? Math.round((field.currentCount / field.capacity) * 100)
-                    : null;
-                  
                   return (
                     <TableRow
                       key={field.id}
@@ -203,26 +319,17 @@ export function PropertyWithFields({
                         {field.capacity || '-'}
                       </TableCell>
                       <TableCell className="font-mono">
-                        {field.acres ?? '-'}
+                        {formatAcresDisplay(field.acres)}
                       </TableCell>
                       <TableCell>
-                        {utilization !== null ? (
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-muted rounded-full h-2 max-w-[100px]">
-                              <div 
-                                className={`h-2 rounded-full ${
-                                  utilization > 90 ? 'bg-destructive' : 
-                                  utilization > 75 ? 'bg-chart-3' : 
-                                  'bg-chart-4'
-                                }`}
-                                style={{ width: `${Math.min(utilization, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-sm font-medium">{utilization}%</span>
-                          </div>
+                        {field.certifiedOrganic ? (
+                          <Badge variant="secondary">Certified</Badge>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {formatTonDmPerAcre(field.haySummary?.tonDmPerAcre)}
                       </TableCell>
                       <TableCell className="text-right">
                         {field.boundaryGeoJson && (
@@ -239,6 +346,18 @@ export function PropertyWithFields({
                             Mapped
                           </Button>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenFieldRecords?.(field.id);
+                          }}
+                          data-testid={`button-field-records-${field.id}`}
+                        >
+                          <ClipboardList className="h-4 w-4" />
+                          Records
+                        </Button>
                         <Button 
                           variant="ghost" 
                           size="sm"
@@ -253,6 +372,12 @@ export function PropertyWithFields({
                         <Button
                           variant="ghost"
                           size="sm"
+                          disabled={field.assignedCount > 0}
+                          title={
+                            field.assignedCount > 0
+                              ? "Move all animals out of this field before deleting it."
+                              : `Delete ${field.name}`
+                          }
                           onClick={(event) => {
                             event.stopPropagation();
                             onDeleteField?.(field.id);
@@ -267,10 +392,6 @@ export function PropertyWithFields({
                 })}
               </TableBody>
             </Table>
-          </div>
-        ) : (
-          <div className="text-center py-6 text-sm text-muted-foreground border rounded-md">
-            No fields added yet
           </div>
         )}
       </CardContent>

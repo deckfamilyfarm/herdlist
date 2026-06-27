@@ -37,6 +37,7 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
     leaseStartDate: "",
     leaseEndDate: "",
     leaseholder: "",
+    leaseRatePerAcre: "",
   });
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
         leaseStartDate: toDateInputValue(property.leaseStartDate),
         leaseEndDate: toDateInputValue(property.leaseEndDate),
         leaseholder: property.leaseholder || "",
+        leaseRatePerAcre: property.leaseRatePerAcre?.toString() || "",
       });
       setBoundaryGeoJsonText(formatPropertyBoundaryGeoJson(property.boundaryGeoJson));
     } else {
@@ -56,6 +58,7 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
         leaseStartDate: "",
         leaseEndDate: "",
         leaseholder: "",
+        leaseRatePerAcre: "",
       });
       setBoundaryGeoJsonText("");
     }
@@ -83,6 +86,7 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
           leaseStartDate: "",
           leaseEndDate: "",
           leaseholder: "",
+          leaseRatePerAcre: "",
         });
         setBoundaryGeoJsonText("");
       }
@@ -114,6 +118,7 @@ export function PropertyFormDialog({ open, onOpenChange, onSubmit, property }: P
       leaseStartDate: formData.isLeased === "yes" && formData.leaseStartDate ? formData.leaseStartDate : null,
       leaseEndDate: formData.isLeased === "yes" && formData.leaseEndDate ? formData.leaseEndDate : null,
       leaseholder: formData.isLeased === "yes" && formData.leaseholder ? formData.leaseholder : null,
+      leaseRatePerAcre: formData.isLeased === "yes" && formData.leaseRatePerAcre ? formData.leaseRatePerAcre : null,
       boundaryGeoJson: geoJson,
     };
     createPropertyMutation.mutate(submitData);

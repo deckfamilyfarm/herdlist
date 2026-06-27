@@ -35,7 +35,7 @@ const CSV_TEMPLATES: Record<string, string[]> = {
     "betacasein",
     "polled",
   ],
-  properties: ["name", "isLeased", "leaseStartDate", "leaseEndDate", "leaseholder"],
+  properties: ["name", "isLeased", "leaseStartDate", "leaseEndDate", "leaseholder", "leaseRatePerAcre"],
   fields: ["name", "propertyName", "capacity", "acres"],
   vaccinations: ["animalTag", "vaccineName", "administeredDate", "administeredBy", "nextDueDate"],
   events: ["animalTag", "eventType", "eventDate", "description"],
@@ -68,12 +68,13 @@ const FORMAT_NOTES: Record<string, string[]> = {
   ],
   properties: [
     "isLeased: yes or no",
+    "leaseRatePerAcre: dollars per acre with up to 2 decimal places (optional)",
     "Dates: YYYY-MM-DD format",
   ],
   fields: [
     "propertyName must match existing property",
     "capacity: number",
-    "acres: number (optional)",
+    "acres: number with up to 2 decimal places (optional)",
   ],
   vaccinations: [
     "animalTag must match existing animal",

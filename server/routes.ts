@@ -17,6 +17,10 @@ import {
   insertAnimalSchema,
   insertPropertySchema,
   insertFieldSchema,
+  insertHayRecordSchema,
+  updateHayRecordSchema,
+  insertFieldAmendmentRecordSchema,
+  updateFieldAmendmentRecordSchema,
   insertMovementSchema,
   insertVaccinationSchema,
   insertEventSchema,
@@ -42,6 +46,8 @@ import {
   fields as fieldsTable,
   type InsertProperty,
   type InsertField,
+  type InsertHayRecord,
+  type InsertFieldAmendmentRecord,
   type InsertVaccination,
   type InsertEvent,
   type InsertCalvingRecord,
@@ -664,7 +670,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteProperty(req.params.id);
       res.status(204).send();
     } catch (error: any) {
-      res.status(500).json({ message: error.message });
+      const message = error?.message || "Failed to delete property";
+      res.status(400).json({ message });
     }
   });
 
@@ -696,6 +703,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const fields = await storage.getFieldsByPropertyId(req.params.propertyId);
       res.json(fields);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/hay-records", isAdmin, async (req, res) => {
+    try {
+      const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
+      if (!Number.isInteger(year) || year < 1900 || year > 9999) {
+        res.status(400).json({ message: "Invalid year" });
+        return;
+      }
+
+      const summaries = await storage.getHayRecordSummaries(year);
+      res.json(summaries);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/fields/:fieldId/hay-records", isAdmin, async (req, res) => {
+    try {
+      const records = await storage.getHayRecordsByFieldId(req.params.fieldId);
+      res.json(records);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/fields/:fieldId/hay-records", isAdmin, async (req, res) => {
+    try {
+      const field = await storage.getFieldById(req.params.fieldId);
+      if (!field) {
+        res.status(404).json({ message: "Field not found" });
+        return;
+      }
+
+      const validated: InsertHayRecord = insertHayRecordSchema.parse({
+        ...req.body,
+        fieldId: req.params.fieldId,
+      });
+      const record = await storage.createHayRecord(validated);
+      res.status(201).json(record);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.put("/api/hay-records/:id", isAdmin, async (req, res) => {
+    try {
+      const existing = await storage.getHayRecordById(req.params.id);
+      if (!existing) {
+        res.status(404).json({ message: "Hay record not found" });
+        return;
+      }
+
+      const patch = updateHayRecordSchema.parse(req.body);
+      const validated: InsertHayRecord = insertHayRecordSchema.parse({
+        ...existing,
+        ...patch,
+        fieldId: existing.fieldId,
+      });
+      const record = await storage.updateHayRecord(req.params.id, validated);
+      res.json(record);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.delete("/api/hay-records/:id", isAdmin, async (req, res) => {
+    try {
+      await storage.deleteHayRecord(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/fields/:fieldId/amendment-records", isAdmin, async (req, res) => {
+    try {
+      const records = await storage.getFieldAmendmentRecordsByFieldId(req.params.fieldId);
+      res.json(records);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/fields/:fieldId/amendment-records", isAdmin, async (req, res) => {
+    try {
+      const field = await storage.getFieldById(req.params.fieldId);
+      if (!field) {
+        res.status(404).json({ message: "Field not found" });
+        return;
+      }
+
+      const validated: InsertFieldAmendmentRecord = insertFieldAmendmentRecordSchema.parse({
+        ...req.body,
+        fieldId: req.params.fieldId,
+      });
+      const record = await storage.createFieldAmendmentRecord(validated);
+      res.status(201).json(record);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.put("/api/amendment-records/:id", isAdmin, async (req, res) => {
+    try {
+      const existing = await storage.getFieldAmendmentRecordById(req.params.id);
+      if (!existing) {
+        res.status(404).json({ message: "Amendment record not found" });
+        return;
+      }
+
+      const patch = updateFieldAmendmentRecordSchema.parse(req.body);
+      const validated: InsertFieldAmendmentRecord = insertFieldAmendmentRecordSchema.parse({
+        ...existing,
+        ...patch,
+        fieldId: existing.fieldId,
+      });
+      const record = await storage.updateFieldAmendmentRecord(req.params.id, validated);
+      res.json(record);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.delete("/api/amendment-records/:id", isAdmin, async (req, res) => {
+    try {
+      await storage.deleteFieldAmendmentRecord(req.params.id);
+      res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -1133,6 +1287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 leaseStartDate: csvRow.leaseStartDate || null,
                 leaseEndDate: csvRow.leaseEndDate || null,
                 leaseholder: csvRow.leaseholder || null,
+                leaseRatePerAcre: csvRow.leaseRatePerAcre || null,
               });
             } catch (error: any) {
               result.failed++;
@@ -1168,7 +1323,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               validFields.push({
                 name: csvRow.name,
                 propertyId: property.id,
-                capacity: csvRow.capacity ? parseInt(csvRow.capacity) : null,
+                capacity: csvRow.capacity,
+                acres: csvRow.acres,
               });
             } catch (error: any) {
               result.failed++;

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS `properties` (
   `lease_start_date` DATE,
   `lease_end_date` DATE,
   `leaseholder` VARCHAR(255),
+  `lease_rate_per_acre` DECIMAL(10,2),
   `boundary_geojson` JSON,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -38,10 +39,45 @@ CREATE TABLE IF NOT EXISTS `fields` (
   `name` VARCHAR(255) NOT NULL,
   `property_id` VARCHAR(36) NOT NULL,
   `capacity` INT,
-  `acres` INT,
+  `acres` DECIMAL(10,2),
+  `certified_organic` BOOLEAN DEFAULT FALSE,
   `boundary_geojson` JSON,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`property_id`) REFERENCES `properties`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Hay Records Table
+CREATE TABLE IF NOT EXISTS `hay_records` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `field_id` VARCHAR(36) NOT NULL,
+  `hay_type` ENUM('balage', 'dry_hay') NOT NULL,
+  `baling_date` DATE NOT NULL,
+  `bale_count` INT NOT NULL,
+  `bale_weight_lbs` DECIMAL(10,2) NOT NULL,
+  `dry_matter_percent` DECIMAL(5,2) NOT NULL,
+  `acres_cut` DECIMAL(10,2) NOT NULL,
+  `storage_location` VARCHAR(255),
+  `notes` VARCHAR(2000),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`field_id`) REFERENCES `fields`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Field Amendment Records Table
+CREATE TABLE IF NOT EXISTS `field_amendment_records` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `field_id` VARCHAR(36) NOT NULL,
+  `amendment_type` ENUM('reseeding', 'manure', 'lime') NOT NULL,
+  `application_date` DATE NOT NULL,
+  `acres_treated` DECIMAL(10,2) NOT NULL,
+  `notes` VARCHAR(2000),
+  `seed_notes` VARCHAR(2000),
+  `manure_rate_yards_per_acre` DECIMAL(10,2),
+  `manure_source` VARCHAR(255),
+  `spreader_type` ENUM('vertical_beater', 'horizontal_beater'),
+  `lime_type` VARCHAR(255),
+  `lime_tons_per_acre` DECIMAL(10,2),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`field_id`) REFERENCES `fields`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Movements Table

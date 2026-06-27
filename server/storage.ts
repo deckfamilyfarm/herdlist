@@ -7,6 +7,8 @@ import {
   animals,
   properties,
   fields,
+  hayRecords,
+  fieldAmendmentRecords,
   movements,
   vaccinations,
   events,
@@ -23,6 +25,12 @@ import {
   type InsertProperty,
   type Field,
   type InsertField,
+  type FieldHaySummary,
+  type HayRecord,
+  type HayRecordWithMetrics,
+  type InsertHayRecord,
+  type FieldAmendmentRecord,
+  type InsertFieldAmendmentRecord,
   type Movement,
   type InsertMovement,
   type Vaccination,
@@ -200,6 +208,58 @@ const mapSlaughterRow = (row: any): SlaughterRecord => {
   } as SlaughterRecord;
 };
 
+const toFiniteNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const withHayMetrics = (record: HayRecord): HayRecordWithMetrics => {
+  const totalDmTons =
+    (toFiniteNumber(record.baleCount) *
+      toFiniteNumber(record.baleWeightLbs) *
+      (toFiniteNumber(record.dryMatterPercent) / 100)) /
+    2000;
+  const acresCut = toFiniteNumber(record.acresCut);
+
+  return {
+    ...record,
+    totalDmTons,
+    tonDmPerAcre: acresCut > 0 ? totalDmTons / acresCut : null,
+  };
+};
+
+const cleanFieldAmendmentRecord = (
+  record: InsertFieldAmendmentRecord,
+): InsertFieldAmendmentRecord => {
+  if (record.amendmentType === "reseeding") {
+    return {
+      ...record,
+      manureRateYardsPerAcre: null,
+      manureSource: null,
+      spreaderType: null,
+      limeType: null,
+      limeTonsPerAcre: null,
+    };
+  }
+
+  if (record.amendmentType === "manure") {
+    return {
+      ...record,
+      seedNotes: null,
+      limeType: null,
+      limeTonsPerAcre: null,
+    };
+  }
+
+  return {
+    ...record,
+    seedNotes: null,
+    manureRateYardsPerAcre: null,
+    manureSource: null,
+    spreaderType: null,
+  };
+};
+
 const setAnimalRemovalStatus = async (
   animalId: string,
   recordType: "slaughtered" | "sold",
@@ -255,6 +315,20 @@ export interface IStorage {
   getFieldsByPropertyId(propertyId: string): Promise<Field[]>;
   updateField(id: string, field: Partial<InsertField>): Promise<Field | undefined>;
   deleteField(id: string): Promise<void>;
+  createHayRecord(record: InsertHayRecord): Promise<HayRecordWithMetrics>;
+  getHayRecordById(id: string): Promise<HayRecord | undefined>;
+  getHayRecordsByFieldId(fieldId: string): Promise<HayRecordWithMetrics[]>;
+  updateHayRecord(id: string, record: InsertHayRecord): Promise<HayRecordWithMetrics | undefined>;
+  deleteHayRecord(id: string): Promise<void>;
+  getHayRecordSummaries(year: number): Promise<FieldHaySummary[]>;
+  createFieldAmendmentRecord(record: InsertFieldAmendmentRecord): Promise<FieldAmendmentRecord>;
+  getFieldAmendmentRecordById(id: string): Promise<FieldAmendmentRecord | undefined>;
+  getFieldAmendmentRecordsByFieldId(fieldId: string): Promise<FieldAmendmentRecord[]>;
+  updateFieldAmendmentRecord(
+    id: string,
+    record: InsertFieldAmendmentRecord,
+  ): Promise<FieldAmendmentRecord | undefined>;
+  deleteFieldAmendmentRecord(id: string): Promise<void>;
   getCurrentAnimalCountByField(): Promise<{
     property: string;
     field: string;
@@ -637,6 +711,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProperty(id: string): Promise<void> {
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(animals)
+      .innerJoin(fields, eq(animals.currentFieldId, fields.id))
+      .where(eq(fields.propertyId, id));
+
+    if (count > 0) {
+      throw new Error("You must remove animals from this property before deleting it.");
+    }
+
+    const propertyFields = await db
+      .select({ id: fields.id })
+      .from(fields)
+      .where(eq(fields.propertyId, id));
+    const fieldIds = propertyFields.map((field) => field.id);
+
+    if (fieldIds.length > 0) {
+      await db.delete(hayRecords).where(inArray(hayRecords.fieldId, fieldIds));
+      await db
+        .delete(fieldAmendmentRecords)
+        .where(inArray(fieldAmendmentRecords.fieldId, fieldIds));
+      await db
+        .update(movements)
+        .set({ fromFieldId: null })
+        .where(inArray(movements.fromFieldId, fieldIds));
+      await db.delete(movements).where(inArray(movements.toFieldId, fieldIds));
+      await db.delete(fields).where(eq(fields.propertyId, id));
+    }
+
     await db.delete(properties).where(eq(properties.id, id));
   }
 
@@ -678,7 +781,142 @@ export class DatabaseStorage implements IStorage {
       throw new Error("You must remove animals from this field before deleting it.");
     }
 
+    await db
+      .update(movements)
+      .set({ fromFieldId: null })
+      .where(eq(movements.fromFieldId, id));
+    await db.delete(movements).where(eq(movements.toFieldId, id));
+    await db.delete(hayRecords).where(eq(hayRecords.fieldId, id));
+    await db.delete(fieldAmendmentRecords).where(eq(fieldAmendmentRecords.fieldId, id));
     await db.delete(fields).where(eq(fields.id, id));
+  }
+
+  async createHayRecord(record: InsertHayRecord): Promise<HayRecordWithMetrics> {
+    const id = crypto.randomUUID();
+    await db.insert(hayRecords).values({ ...(record as any), id });
+    const [created] = await db.select().from(hayRecords).where(eq(hayRecords.id, id));
+    return withHayMetrics(created as HayRecord);
+  }
+
+  async getHayRecordById(id: string): Promise<HayRecord | undefined> {
+    const [record] = await db.select().from(hayRecords).where(eq(hayRecords.id, id));
+    return record as HayRecord | undefined;
+  }
+
+  async getHayRecordsByFieldId(fieldId: string): Promise<HayRecordWithMetrics[]> {
+    const records = await db
+      .select()
+      .from(hayRecords)
+      .where(eq(hayRecords.fieldId, fieldId))
+      .orderBy(desc(hayRecords.balingDate), desc(hayRecords.createdAt));
+    return records.map((record) => withHayMetrics(record as HayRecord));
+  }
+
+  async updateHayRecord(
+    id: string,
+    record: InsertHayRecord,
+  ): Promise<HayRecordWithMetrics | undefined> {
+    await db.update(hayRecords).set(record as any).where(eq(hayRecords.id, id));
+    const [updated] = await db.select().from(hayRecords).where(eq(hayRecords.id, id));
+    return updated ? withHayMetrics(updated as HayRecord) : undefined;
+  }
+
+  async deleteHayRecord(id: string): Promise<void> {
+    await db.delete(hayRecords).where(eq(hayRecords.id, id));
+  }
+
+  async getHayRecordSummaries(year: number): Promise<FieldHaySummary[]> {
+    const recordRows = await db
+      .select()
+      .from(hayRecords)
+      .where(sql`year(${hayRecords.balingDate}) = ${year}`);
+    const fieldRows = await db.select().from(fields);
+    const fieldAcres = new Map(fieldRows.map((field) => [field.id, toFiniteNumber(field.acres)]));
+    const summaries = new Map<
+      string,
+      { cutCount: number; dryHayBales: number; balageBales: number; totalDmTons: number }
+    >();
+
+    recordRows.forEach((record) => {
+      const withMetrics = withHayMetrics(record as HayRecord);
+      const existing = summaries.get(withMetrics.fieldId) ?? {
+        cutCount: 0,
+        dryHayBales: 0,
+        balageBales: 0,
+        totalDmTons: 0,
+      };
+      existing.cutCount += 1;
+      if (withMetrics.hayType === "dry_hay") {
+        existing.dryHayBales += toFiniteNumber(withMetrics.baleCount);
+      } else if (withMetrics.hayType === "balage") {
+        existing.balageBales += toFiniteNumber(withMetrics.baleCount);
+      }
+      existing.totalDmTons += withMetrics.totalDmTons;
+      summaries.set(withMetrics.fieldId, existing);
+    });
+
+    return Array.from(summaries.entries()).map(([fieldId, summary]) => {
+      const acres = fieldAcres.get(fieldId) ?? 0;
+      return {
+        fieldId,
+        year,
+        cutCount: summary.cutCount,
+        dryHayBales: summary.dryHayBales,
+        balageBales: summary.balageBales,
+        totalDmTons: summary.totalDmTons,
+        tonDmPerAcre: acres > 0 ? summary.totalDmTons / acres : null,
+      };
+    });
+  }
+
+  async createFieldAmendmentRecord(
+    record: InsertFieldAmendmentRecord,
+  ): Promise<FieldAmendmentRecord> {
+    const id = crypto.randomUUID();
+    await db.insert(fieldAmendmentRecords).values({
+      ...(cleanFieldAmendmentRecord(record) as any),
+      id,
+    });
+    const [created] = await db
+      .select()
+      .from(fieldAmendmentRecords)
+      .where(eq(fieldAmendmentRecords.id, id));
+    return created as FieldAmendmentRecord;
+  }
+
+  async getFieldAmendmentRecordById(id: string): Promise<FieldAmendmentRecord | undefined> {
+    const [record] = await db
+      .select()
+      .from(fieldAmendmentRecords)
+      .where(eq(fieldAmendmentRecords.id, id));
+    return record as FieldAmendmentRecord | undefined;
+  }
+
+  async getFieldAmendmentRecordsByFieldId(fieldId: string): Promise<FieldAmendmentRecord[]> {
+    return (await db
+      .select()
+      .from(fieldAmendmentRecords)
+      .where(eq(fieldAmendmentRecords.fieldId, fieldId))
+      .orderBy(desc(fieldAmendmentRecords.applicationDate), desc(fieldAmendmentRecords.createdAt))) as FieldAmendmentRecord[];
+  }
+
+  async updateFieldAmendmentRecord(
+    id: string,
+    record: InsertFieldAmendmentRecord,
+  ): Promise<FieldAmendmentRecord | undefined> {
+    await db
+      .update(fieldAmendmentRecords)
+      .set(cleanFieldAmendmentRecord(record) as any)
+      .where(eq(fieldAmendmentRecords.id, id));
+    const [updated] = await db
+      .select()
+      .from(fieldAmendmentRecords)
+      .where(eq(fieldAmendmentRecords.id, id));
+    return updated as FieldAmendmentRecord | undefined;
+  }
+
+  async deleteFieldAmendmentRecord(id: string): Promise<void> {
+    await db.delete(fieldAmendmentRecords).where(eq(fieldAmendmentRecords.id, id));
   }
 
   async getCurrentAnimalCountByField(): Promise<{

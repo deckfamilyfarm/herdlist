@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -38,6 +39,7 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
     propertyId: "",
     capacity: "",
     acres: "",
+    certifiedOrganic: false,
   });
 
   const { data: properties = [] } = useQuery<Property[]>({
@@ -58,6 +60,7 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
         propertyId: activeField.propertyId || "",
         capacity: activeField.capacity?.toString() || "",
         acres: activeField.acres?.toString() || "",
+        certifiedOrganic: Boolean(activeField.certifiedOrganic),
       });
       setBoundaryGeoJsonText(formatPropertyBoundaryGeoJson(activeField.boundaryGeoJson));
     } else {
@@ -66,6 +69,7 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
         propertyId: propertyId || "",
         capacity: "",
         acres: "",
+        certifiedOrganic: false,
       });
       setBoundaryGeoJsonText("");
     }
@@ -95,6 +99,7 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
           propertyId: propertyId || "",
           capacity: "",
           acres: "",
+          certifiedOrganic: false,
         });
         setBoundaryGeoJsonText("");
       }
@@ -124,7 +129,8 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
       name: formData.name,
       propertyId: formData.propertyId,
       capacity: formData.capacity ? parseInt(formData.capacity) : null,
-      acres: formData.acres ? parseInt(formData.acres) : null,
+      acres: formData.acres || null,
+      certifiedOrganic: formData.certifiedOrganic,
       boundaryGeoJson: geoJson,
     };
     createFieldMutation.mutate(submitData);
@@ -186,10 +192,22 @@ export function FieldFormDialog({ open, onOpenChange, onSubmit, propertyId, fiel
               id="acres"
               type="number"
               min="0"
+              step="0.01"
               value={formData.acres}
               onChange={(e) => setFormData({ ...formData, acres: e.target.value })}
               data-testid="input-acres"
             />
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="certifiedOrganic"
+              checked={formData.certifiedOrganic}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, certifiedOrganic: checked === true })
+              }
+              data-testid="checkbox-certified-organic"
+            />
+            <Label htmlFor="certifiedOrganic">Certified Organic</Label>
           </div>
 
           <div className="space-y-2">
