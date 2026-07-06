@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import Dashboard from "@/pages/Dashboard";
 import Animals from "@/pages/Animals";
+import Lots from "@/pages/Lots";
 import Locations from "@/pages/Locations";
 import Movements from "@/pages/Movements";
 import Reports from "@/pages/Reports";
@@ -30,6 +31,7 @@ function Router() {
         <>
           <Route path="/" component={Dashboard} />
           <Route path="/animals" component={Animals} />
+          <Route path="/lots" component={Lots} />
           <Route path="/locations" component={Locations} />
           <Route path="/movements" component={Movements} />
           <Route path="/reports" component={Reports} />

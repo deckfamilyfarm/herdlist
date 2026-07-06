@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
-import type { AnimalListItem, Field, Property, AnimalStatus, Movement, SlaughterRecord } from "@shared/schema";
+import type { AnimalListItem, Field, Property, AnimalStatus, Movement, SlaughterRecord, LivestockLotListItem } from "@shared/schema";
 import type { AnimalTypeFilter, DueDateFilter, ReportGrouping, StatusFilter } from "@/components/ReportFilters";
 
 interface PropertyCount {
@@ -32,6 +32,12 @@ interface PropertyCount {
   dairy: number;
   beef: number;
   ai: number;
+  sheepEwes: number;
+  sheepRams: number;
+  sheepLambs: number;
+  sheepWethers: number;
+  sheepUnknown: number;
+  sheepTotal: number;
 }
 
 interface LatestNote {
@@ -158,8 +164,12 @@ export default function Reports() {
     queryKey: ["/api/slaughter-records"],
   });
 
+  const { data: lots = [], isLoading: lotsLoading } = useQuery<LivestockLotListItem[]>({
+    queryKey: ["/api/lots"],
+  });
+
   const isAnyLoading =
-    animalsLoading || fieldsLoading || propertiesLoading || notesLoading || movementsLoading || slaughterLoading;
+    animalsLoading || fieldsLoading || propertiesLoading || notesLoading || movementsLoading || slaughterLoading || lotsLoading;
 
   // ---- Filter state ----
   const [asOfDate, setAsOfDate] = useState<string>("");
@@ -171,11 +181,11 @@ export default function Reports() {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>("all");
   const [grazingType, setGrazingType] = useState<GrazingTypeFilter>("all_dairy_beef");
-  const [excludeWet, setExcludeWet] = useState(defaultGrazingFilters.excludeWet);
-  const [excludeMissingDob, setExcludeMissingDob] = useState(defaultGrazingFilters.excludeMissingDob);
-  const [excludeUnderSixMonths, setExcludeUnderSixMonths] = useState(defaultGrazingFilters.excludeUnderSixMonths);
-  const [backfillUnknownPastures, setBackfillUnknownPastures] = useState(defaultGrazingFilters.backfillUnknownPastures);
-  const [treatUnknownPastureAsGrazing, setTreatUnknownPastureAsGrazing] = useState(defaultGrazingFilters.treatUnknownPastureAsGrazing);
+  const [excludeWet, setExcludeWet] = useState<boolean>(defaultGrazingFilters.excludeWet);
+  const [excludeMissingDob, setExcludeMissingDob] = useState<boolean>(defaultGrazingFilters.excludeMissingDob);
+  const [excludeUnderSixMonths, setExcludeUnderSixMonths] = useState<boolean>(defaultGrazingFilters.excludeUnderSixMonths);
+  const [backfillUnknownPastures, setBackfillUnknownPastures] = useState<boolean>(defaultGrazingFilters.backfillUnknownPastures);
+  const [treatUnknownPastureAsGrazing, setTreatUnknownPastureAsGrazing] = useState<boolean>(defaultGrazingFilters.treatUnknownPastureAsGrazing);
 
   const fieldById = useMemo(() => new Map(fields.map((f) => [f.id, f])), [fields]);
   const propertyById = useMemo(() => new Map(properties.map((p) => [p.id, p])), [properties]);
@@ -278,31 +288,41 @@ export default function Reports() {
   // ---- Per-property breakdown from filtered animals ----
   const propertyCounts: PropertyCount[] = useMemo(() => {
     if (
-      filteredAnimals.length === 0 ||
       fields.length === 0 ||
       properties.length === 0
     ) {
       return [];
     }
 
-    const map = new Map<
-      string,
-      { propertyId?: string; property: string; dairy: number; beef: number; ai: number }
-    >();
+    const map = new Map<string, PropertyCount>();
+
+    const ensureRecord = (propertyId: string | undefined, propertyName: string) => {
+      const key = propertyId ?? "unassigned";
+      if (!map.has(key)) {
+        map.set(key, {
+          propertyId,
+          property: propertyName,
+          dairy: 0,
+          beef: 0,
+          ai: 0,
+          sheepEwes: 0,
+          sheepRams: 0,
+          sheepLambs: 0,
+          sheepWethers: 0,
+          sheepUnknown: 0,
+          sheepTotal: 0,
+        });
+      }
+      return map.get(key)!;
+    };
 
     for (const animal of filteredAnimals) {
       const cfId = (animal as any).currentFieldId || animal.currentFieldId;
       const field = cfId ? fieldById.get(cfId) : undefined;
       const prop = field ? propertyById.get(field.propertyId as string) : undefined;
 
-      const key = prop?.id ?? "unassigned";
       const name = prop?.name ?? "Unassigned / No Property";
-
-      if (!map.has(key)) {
-        map.set(key, { propertyId: prop?.id, property: name, dairy: 0, beef: 0, ai: 0 });
-      }
-
-      const rec = map.get(key)!;
+      const rec = ensureRecord(prop?.id, name);
       const animalType = String(animal.type ?? "").trim().toLowerCase();
       if (animalType === "dairy") {
         rec.dairy += 1;
@@ -313,10 +333,28 @@ export default function Reports() {
       }
     }
 
+    lots.forEach((lot) => {
+      if (String(lot.status ?? "active").toLowerCase() !== "active") return;
+      if (String(lot.species ?? "").toLowerCase() !== "sheep") return;
+      const field = lot.currentFieldId ? fieldById.get(lot.currentFieldId) : undefined;
+      if (selectedFieldIds.size > 0) {
+        if (!lot.currentFieldId && !selectedFieldIds.has(NO_LOCATION_ID)) return;
+        if (lot.currentFieldId && !selectedFieldIds.has(lot.currentFieldId)) return;
+      }
+      const prop = field ? propertyById.get(field.propertyId as string) : undefined;
+      const rec = ensureRecord(prop?.id, prop?.name ?? "Unassigned / No Property");
+      rec.sheepEwes += Number(lot.ewes || 0);
+      rec.sheepRams += Number(lot.rams || 0);
+      rec.sheepLambs += Number(lot.lambs || 0);
+      rec.sheepWethers += Number(lot.wethers || 0);
+      rec.sheepUnknown += Number(lot.unknown || 0);
+      rec.sheepTotal += Number(lot.totalCount || 0);
+    });
+
     return Array.from(map.values()).sort((a, b) =>
       a.property.localeCompare(b.property),
     );
-  }, [filteredAnimals, fieldById, propertyById]);
+  }, [filteredAnimals, fieldById, propertyById, lots, selectedFieldIds]);
 
   const propertyChartData = useMemo(
     () =>
@@ -1217,7 +1255,7 @@ export default function Reports() {
       {/* Chart uses filtered per-property counts */}
       <HerdCompositionChart
         data={propertyChartData}
-        title="Number of Animals by Property"
+        title="Livestock by Property"
         showPropertyLabel={false}
       />
 
@@ -1323,12 +1361,13 @@ export default function Reports() {
                   <TableHead className="text-right">Dairy</TableHead>
                   <TableHead className="text-right">Beef</TableHead>
                   <TableHead className="text-right">AI</TableHead>
+                  <TableHead className="text-right">Sheep</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {propertyCounts.map((pc) => {
-                  const total = pc.dairy + pc.beef + pc.ai;
+                  const total = pc.dairy + pc.beef + pc.ai + pc.sheepTotal;
                   return (
                     <TableRow key={pc.propertyId ?? pc.property}>
                       <TableCell className="font-medium">
@@ -1342,6 +1381,9 @@ export default function Reports() {
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {pc.ai}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {pc.sheepTotal}
                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {total}

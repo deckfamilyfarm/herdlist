@@ -28,6 +28,11 @@ import {
   insertSlaughterRecordSchema,
   insertNoteSchema,
   insertBreedingRecordSchema,
+  insertLivestockLotSchema,
+  updateLivestockLotSchema,
+  insertLivestockLotCountEventSchema,
+  moveLivestockLotSchema,
+  upsertLivestockSpeciesSettingsSchema,
   csvAnimalSchema,
   csvPropertySchema,
   csvFieldSchema,
@@ -56,6 +61,11 @@ import {
   type Note,
   type BreedingRecord,
   type InsertBreedingRecord,
+  type InsertLivestockLot,
+  type UpdateLivestockLot,
+  type InsertLivestockLotCountEvent,
+  type MoveLivestockLotInput,
+  type UpsertLivestockSpeciesSettings,
   type CsvNoteRow,
 } from "@shared/schema";
 import { z } from "zod";
@@ -610,6 +620,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Livestock settings and lot routes
+  app.get("/api/livestock-settings", isAdmin, async (req, res) => {
+    try {
+      const species = typeof req.query.species === "string" ? req.query.species : undefined;
+      const settings = await storage.getLivestockSpeciesSettings(species);
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/livestock-settings/:species", isAdmin, async (req, res) => {
+    try {
+      const validated: UpsertLivestockSpeciesSettings = upsertLivestockSpeciesSettingsSchema.parse({
+        ...req.body,
+        species: req.params.species,
+      });
+      const settings = await storage.upsertLivestockSpeciesSettings(validated);
+      res.json(settings);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.get("/api/lots", isAdmin, async (_req, res) => {
+    try {
+      const lots = await storage.getAllLivestockLots();
+      res.json(lots);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/lots", isAdmin, async (req, res) => {
+    try {
+      const validated: InsertLivestockLot = insertLivestockLotSchema.parse(req.body);
+      const lot = await storage.createLivestockLot(validated);
+      res.status(201).json(lot);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.get("/api/lots/recent-movements", isAdmin, async (req, res) => {
+    try {
+      const limit = req.query.limit ? Number(req.query.limit) : 10;
+      const movements = await storage.getRecentLivestockMovements(limit);
+      res.json(movements);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/lots/:id", isAdmin, async (req, res) => {
+    try {
+      const lot = await storage.getLivestockLotById(req.params.id);
+      if (!lot) {
+        res.status(404).json({ message: "Lot not found" });
+        return;
+      }
+      res.json(lot);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/lots/:id", isAdmin, async (req, res) => {
+    try {
+      const validated: UpdateLivestockLot = updateLivestockLotSchema.parse(req.body);
+      const lot = await storage.updateLivestockLot(req.params.id, validated);
+      if (!lot) {
+        res.status(404).json({ message: "Lot not found" });
+        return;
+      }
+      res.json(lot);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.delete("/api/lots/:id", isAdmin, async (req, res) => {
+    try {
+      await storage.deleteLivestockLot(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/lots/:id/count-events", isAdmin, async (req, res) => {
+    try {
+      const events = await storage.getLivestockLotCountEvents(req.params.id);
+      res.json(events);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/lots/:id/count-events", isAdmin, async (req, res) => {
+    try {
+      const validated: InsertLivestockLotCountEvent = insertLivestockLotCountEventSchema.parse(req.body);
+      const event = await storage.createLivestockLotCountEvent(req.params.id, validated);
+      res.status(201).json(event);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
+  app.post("/api/lots/:id/move", isAdmin, async (req, res) => {
+    try {
+      const validated: MoveLivestockLotInput = moveLivestockLotSchema.parse(req.body);
+      const movement = await storage.moveLivestockLot(req.params.id, validated);
+      res.status(201).json(movement);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Validation error", errors: error.errors });
+      } else {
+        res.status(500).json({ message: error.message });
+      }
+    }
+  });
+
   // Properties routes
   app.get("/api/properties", isAdmin, async (req, res) => {
     try {
@@ -932,7 +1080,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/movements/recent", isAdmin, async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-      const movements = await storage.getRecentMovements(limit);
+      const movements = await storage.getRecentLivestockMovements(limit);
       res.json(movements);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -1159,16 +1307,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard routes
   app.get("/api/dashboard/stats", isAdmin, async (req, res) => {
     try {
-      const [allAnimals, readyToBreed] = await Promise.all([
+      const [allAnimals, readyToBreed, lots] = await Promise.all([
         storage.getAllAnimals(),
         storage.getAnimalsReadyToBreed(),
+        storage.getAllLivestockLots(),
       ]);
 
       const activeAnimals = allAnimals.filter((a: any) => (a.status ?? "active") === "active");
       const activeReadyToBreed = readyToBreed.filter((a: any) => (a.status ?? "active") === "active");
+      const activeLots = lots.filter((lot: any) => (lot.status ?? "active") === "active");
+      const sheepLots = activeLots.filter((lot) => String(lot.species ?? "").trim().toLowerCase() === "sheep");
+      const sheepCounts = sheepLots.reduce(
+        (acc, lot) => {
+          acc.ewes += Number(lot.ewes || 0);
+          acc.rams += Number(lot.rams || 0);
+          acc.lambs += Number(lot.lambs || 0);
+          acc.wethers += Number(lot.wethers || 0);
+          acc.unknown += Number(lot.unknown || 0);
+          return acc;
+        },
+        { ewes: 0, rams: 0, lambs: 0, wethers: 0, unknown: 0 },
+      );
+      const totalLotHead =
+        sheepCounts.ewes + sheepCounts.rams + sheepCounts.lambs + sheepCounts.wethers + sheepCounts.unknown;
+      const aiCount = activeAnimals.filter(
+        (animal) => String(animal.type ?? "").trim().toLowerCase() === "ai",
+      ).length;
+      const totalLivingAnimals = activeAnimals.length - aiCount + totalLotHead;
 
       const stats = {
         totalAnimals: activeAnimals.length,
+        totalLotHead,
+        totalLivestockHead: activeAnimals.length + totalLotHead,
+        totalLivingAnimals,
+        activeLots: activeLots.length,
+        sheepCounts,
         cowsReadyToBreed: activeReadyToBreed.length,
         animalsByType: activeAnimals.reduce((acc, animal) => {
           const normalizedType = String(animal.type ?? "").trim().toLowerCase();

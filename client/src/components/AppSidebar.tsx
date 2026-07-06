@@ -11,7 +11,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Home, List, MapPin, Upload, BarChart3, Scale, LogOut, Shield } from "lucide-react";
+import { Home, Layers, List, MapPin, Upload, BarChart3, Scale, LogOut, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,6 +26,11 @@ const menuItems = [
     title: "Animals",
     url: "/animals",
     icon: List,
+  },
+  {
+    title: "Lots",
+    url: "/lots",
+    icon: Layers,
   },
   {
     title: "Properties & Fields",

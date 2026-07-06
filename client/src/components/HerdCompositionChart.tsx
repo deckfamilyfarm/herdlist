@@ -8,12 +8,20 @@ interface FieldCount {
   dairy: number;
   beef: number;
   ai: number;
+  sheepEwes?: number;
+  sheepRams?: number;
+  sheepLambs?: number;
+  sheepWethers?: number;
+  sheepUnknown?: number;
+  sheepTotal?: number;
 }
 
 interface HerdCompositionChartProps {
   data: FieldCount[];
   title?: string;
   showPropertyLabel?: boolean;
+  showAi?: boolean;
+  showSheepClasses?: boolean;
   onFieldClick?: (fieldId: string) => void;
 }
 
@@ -21,6 +29,8 @@ export function HerdCompositionChart({
   data,
   title = "Number of Animals by Field",
   showPropertyLabel = true,
+  showAi = true,
+  showSheepClasses = true,
   onFieldClick,
 }: HerdCompositionChartProps) {
   const handleBarClick = (barData: any) => {
@@ -33,7 +43,7 @@ export function HerdCompositionChart({
   const renderFieldTick = (props: any) => {
     const { x, y, payload } = props;
     const entry = data.find((item) => item.fieldId === payload.value);
-    if (!entry) return null;
+    if (!entry) return <g />;
 
     return (
       <g transform={`translate(${x},${y})`}>
@@ -102,14 +112,53 @@ export function HerdCompositionChart({
               onClick={handleBarClick}
               cursor={onFieldClick ? "pointer" : undefined}
             />
-            <Bar
-              dataKey="ai"
-              fill="hsl(var(--chart-4))"
-              name="AI"
-              stackId="total"
-              onClick={handleBarClick}
-              cursor={onFieldClick ? "pointer" : undefined}
-            />
+            {showAi ? (
+              <Bar
+                dataKey="ai"
+                fill="hsl(var(--chart-4))"
+                name="AI"
+                stackId="total"
+                onClick={handleBarClick}
+                cursor={onFieldClick ? "pointer" : undefined}
+              />
+            ) : null}
+            {showSheepClasses ? (
+              <>
+                <Bar
+                  dataKey="sheepEwes"
+                  fill="hsl(var(--chart-2))"
+                  name="Ewes"
+                  stackId="total"
+                  onClick={handleBarClick}
+                  cursor={onFieldClick ? "pointer" : undefined}
+                />
+                <Bar
+                  dataKey="sheepRams"
+                  fill="hsl(var(--chart-2))"
+                  name="Rams"
+                  stackId="total"
+                  onClick={handleBarClick}
+                  cursor={onFieldClick ? "pointer" : undefined}
+                />
+                <Bar
+                  dataKey="sheepLambs"
+                  fill="hsl(var(--chart-2))"
+                  name="Lambs"
+                  stackId="total"
+                  onClick={handleBarClick}
+                  cursor={onFieldClick ? "pointer" : undefined}
+                />
+              </>
+            ) : (
+              <Bar
+                dataKey="sheepTotal"
+                fill="hsl(var(--chart-2))"
+                name="Sheep"
+                stackId="total"
+                onClick={handleBarClick}
+                cursor={onFieldClick ? "pointer" : undefined}
+              />
+            )}
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

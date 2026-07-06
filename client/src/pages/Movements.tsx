@@ -17,7 +17,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Animal, Field, InsertMovement, Movement } from "@shared/schema";
+import type { Animal, Field, InsertMovement, LivestockRecentMovement } from "@shared/schema";
 
 export default function Movements() {
   const { toast } = useToast();
@@ -42,7 +42,7 @@ export default function Movements() {
     queryKey: ['/api/fields'],
   });
 
-  const { data: recentMovements = [] } = useQuery<Movement[]>({
+  const { data: recentMovements = [] } = useQuery<LivestockRecentMovement[]>({
     queryKey: ['/api/movements/recent'],
   });
 

@@ -46,6 +46,80 @@ CREATE TABLE IF NOT EXISTS `fields` (
   FOREIGN KEY (`property_id`) REFERENCES `properties`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Livestock Lots Table
+CREATE TABLE IF NOT EXISTS `livestock_lots` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `name` VARCHAR(255) NOT NULL,
+  `species` VARCHAR(50) NOT NULL DEFAULT 'sheep',
+  `status` ENUM('active', 'inactive', 'sold') NOT NULL DEFAULT 'active',
+  `current_field_id` VARCHAR(36),
+  `ewes` INT NOT NULL DEFAULT 0,
+  `rams` INT NOT NULL DEFAULT 0,
+  `lambs` INT NOT NULL DEFAULT 0,
+  `wethers` INT NOT NULL DEFAULT 0,
+  `unknown` INT NOT NULL DEFAULT 0,
+  `notes` VARCHAR(2000),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (`current_field_id`) REFERENCES `fields`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Livestock Lot Count Events Table
+CREATE TABLE IF NOT EXISTS `livestock_lot_count_events` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `lot_id` VARCHAR(36) NOT NULL,
+  `event_type` ENUM('created', 'correction', 'birth', 'death', 'purchase', 'sale', 'split', 'merge') NOT NULL,
+  `event_date` DATE NOT NULL,
+  `ewes_delta` INT NOT NULL DEFAULT 0,
+  `rams_delta` INT NOT NULL DEFAULT 0,
+  `lambs_delta` INT NOT NULL DEFAULT 0,
+  `wethers_delta` INT NOT NULL DEFAULT 0,
+  `unknown_delta` INT NOT NULL DEFAULT 0,
+  `related_lot_id` VARCHAR(36),
+  `notes` VARCHAR(2000),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`lot_id`) REFERENCES `livestock_lots`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`related_lot_id`) REFERENCES `livestock_lots`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Livestock Lot Movements Table
+CREATE TABLE IF NOT EXISTS `livestock_lot_movements` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `lot_id` VARCHAR(36) NOT NULL,
+  `destination_lot_id` VARCHAR(36),
+  `from_field_id` VARCHAR(36),
+  `to_field_id` VARCHAR(36) NOT NULL,
+  `movement_date` TIMESTAMP NOT NULL,
+  `ewes_moved` INT NOT NULL DEFAULT 0,
+  `rams_moved` INT NOT NULL DEFAULT 0,
+  `lambs_moved` INT NOT NULL DEFAULT 0,
+  `wethers_moved` INT NOT NULL DEFAULT 0,
+  `unknown_moved` INT NOT NULL DEFAULT 0,
+  `notes` VARCHAR(2000),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`lot_id`) REFERENCES `livestock_lots`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`destination_lot_id`) REFERENCES `livestock_lots`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`from_field_id`) REFERENCES `fields`(`id`) ON DELETE SET NULL,
+  FOREIGN KEY (`to_field_id`) REFERENCES `fields`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Livestock Species Settings Table
+CREATE TABLE IF NOT EXISTS `livestock_species_settings` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `species` VARCHAR(50) NOT NULL,
+  `display_name` VARCHAR(100) NOT NULL,
+  `tracking_mode` ENUM('individual', 'lot', 'mixed') NOT NULL DEFAULT 'lot',
+  `lot_label` VARCHAR(100) NOT NULL DEFAULT 'Lot',
+  `class_labels` JSON NOT NULL,
+  `allow_partial_lot_moves` BOOLEAN NOT NULL DEFAULT TRUE,
+  `allow_split_merge` BOOLEAN NOT NULL DEFAULT TRUE,
+  `allow_individual_tracking` BOOLEAN NOT NULL DEFAULT FALSE,
+  `require_correction_reason` BOOLEAN NOT NULL DEFAULT TRUE,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `idx_livestock_species_settings_species` (`species`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Hay Records Table
 CREATE TABLE IF NOT EXISTS `hay_records` (
   `id` VARCHAR(36) PRIMARY KEY,
@@ -199,5 +273,10 @@ CREATE INDEX `idx_animals_tag` ON `animals`(`tag_number`);
 CREATE INDEX `idx_animals_current_field` ON `animals`(`current_field_id`);
 CREATE INDEX `idx_movements_animal` ON `movements`(`animal_id`);
 CREATE INDEX `idx_movements_date` ON `movements`(`movement_date`);
+CREATE INDEX `idx_livestock_lots_field` ON `livestock_lots`(`current_field_id`);
+CREATE INDEX `idx_livestock_lots_species` ON `livestock_lots`(`species`);
+CREATE INDEX `idx_livestock_lot_events_lot` ON `livestock_lot_count_events`(`lot_id`);
+CREATE INDEX `idx_livestock_lot_movements_lot` ON `livestock_lot_movements`(`lot_id`);
+CREATE INDEX `idx_livestock_lot_movements_date` ON `livestock_lot_movements`(`movement_date`);
 CREATE INDEX `idx_vaccinations_animal` ON `vaccinations`(`animal_id`);
 CREATE INDEX `idx_events_animal` ON `events`(`animal_id`);

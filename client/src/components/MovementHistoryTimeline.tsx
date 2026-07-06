@@ -1,20 +1,25 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MoveRight } from "lucide-react";
-import type { Movement } from "@shared/schema";
+import type { LivestockRecentMovement } from "@shared/schema";
 
 interface MovementHistoryTimelineProps {
-  movements: Movement[];
+  movements: LivestockRecentMovement[];
 }
 
-type EnrichedMovement = Movement & {
-  fromFieldName?: string | null;
-  toFieldName?: string | null;
-  tagNumber?: string | null;
+const formatLotCounts = (movement: LivestockRecentMovement) => {
+  const parts = [
+    [movement.ewesMoved, "ewes"],
+    [movement.ramsMoved, "rams"],
+    [movement.lambsMoved, "lambs"],
+    [movement.wethersMoved, "wethers"],
+    [movement.unknownMoved, "unknown"],
+  ]
+    .filter(([count]) => Number(count || 0) > 0)
+    .map(([count, label]) => `${count} ${label}`);
+  return parts.length > 0 ? parts.join(", ") : "Lot movement";
 };
 
 export function MovementHistoryTimeline({ movements }: MovementHistoryTimelineProps) {
-  const enrichedMovements = movements as EnrichedMovement[];
-
   return (
     <Card>
       <CardHeader>
@@ -22,13 +27,15 @@ export function MovementHistoryTimeline({ movements }: MovementHistoryTimelinePr
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {enrichedMovements.length === 0 ? (
+          {movements.length === 0 ? (
             <p className="text-sm text-muted-foreground">No recent movements</p>
           ) : (
-            enrichedMovements.map((movement) => (
+            movements.map((movement) => (
               <div
                 key={movement.id}
-                className="flex items-start gap-3 border-l-2 border-chart-1 pl-4 pb-4 last:pb-0"
+                className={`flex items-start gap-3 border-l-2 pl-4 pb-4 last:pb-0 ${
+                  movement.movementKind === "lot" ? "border-chart-2" : "border-chart-1"
+                }`}
                 data-testid={`movement-${movement.id}`}
               >
                 <div className="flex-1">
@@ -38,7 +45,11 @@ export function MovementHistoryTimeline({ movements }: MovementHistoryTimelinePr
                     <span className="font-medium">{movement.toFieldName || "Unknown"}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {movement.tagNumber ? `Tag ${movement.tagNumber}` : "Tag unknown"}
+                    {movement.movementKind === "lot"
+                      ? `${movement.lotName || "Lot"}: ${formatLotCounts(movement)}`
+                      : movement.tagNumber
+                      ? `Tag ${movement.tagNumber}`
+                      : "Tag unknown"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(movement.movementDate).toLocaleDateString()}

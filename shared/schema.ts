@@ -111,6 +111,21 @@ export const animalStatusEnum = [
 ] as const;
 
 export type AnimalStatus = (typeof animalStatusEnum)[number];
+export const livestockLotStatusEnum = ["active", "inactive", "sold"] as const;
+export type LivestockLotStatus = (typeof livestockLotStatusEnum)[number];
+export const livestockTrackingModeEnum = ["individual", "lot", "mixed"] as const;
+export type LivestockTrackingMode = (typeof livestockTrackingModeEnum)[number];
+export const livestockLotEventTypeEnum = [
+  "created",
+  "correction",
+  "birth",
+  "death",
+  "purchase",
+  "sale",
+  "split",
+  "merge",
+] as const;
+export type LivestockLotEventType = (typeof livestockLotEventTypeEnum)[number];
 export const slaughterRecordTypeEnum = ["slaughtered", "sold"] as const;
 export type SlaughterRecordType = (typeof slaughterRecordTypeEnum)[number];
 export const hayTypeEnum = ["balage", "dry_hay"] as const;
@@ -189,6 +204,78 @@ export const animals = mysqlTable("animals", {
   herdName: herdNameEnum,
   status: mysqlEnum("status", animalStatusEnum).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const livestockLots = mysqlTable("livestock_lots", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: varchar("name", { length: 255 }).notNull(),
+  species: varchar("species", { length: 50 }).notNull().default("sheep"),
+  status: mysqlEnum("status", livestockLotStatusEnum).notNull().default("active"),
+  currentFieldId: varchar("current_field_id", { length: 36 }),
+  ewes: int("ewes").notNull().default(0),
+  rams: int("rams").notNull().default(0),
+  lambs: int("lambs").notNull().default(0),
+  wethers: int("wethers").notNull().default(0),
+  unknown: int("unknown").notNull().default(0),
+  notes: varchar("notes", { length: 2000 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const livestockLotCountEvents = mysqlTable("livestock_lot_count_events", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  lotId: varchar("lot_id", { length: 36 }).notNull(),
+  eventType: mysqlEnum("event_type", livestockLotEventTypeEnum).notNull(),
+  eventDate: date("event_date").notNull(),
+  ewesDelta: int("ewes_delta").notNull().default(0),
+  ramsDelta: int("rams_delta").notNull().default(0),
+  lambsDelta: int("lambs_delta").notNull().default(0),
+  wethersDelta: int("wethers_delta").notNull().default(0),
+  unknownDelta: int("unknown_delta").notNull().default(0),
+  relatedLotId: varchar("related_lot_id", { length: 36 }),
+  notes: varchar("notes", { length: 2000 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const livestockLotMovements = mysqlTable("livestock_lot_movements", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  lotId: varchar("lot_id", { length: 36 }).notNull(),
+  destinationLotId: varchar("destination_lot_id", { length: 36 }),
+  fromFieldId: varchar("from_field_id", { length: 36 }),
+  toFieldId: varchar("to_field_id", { length: 36 }).notNull(),
+  movementDate: timestamp("movement_date").notNull(),
+  ewesMoved: int("ewes_moved").notNull().default(0),
+  ramsMoved: int("rams_moved").notNull().default(0),
+  lambsMoved: int("lambs_moved").notNull().default(0),
+  wethersMoved: int("wethers_moved").notNull().default(0),
+  unknownMoved: int("unknown_moved").notNull().default(0),
+  notes: varchar("notes", { length: 2000 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const livestockSpeciesSettings = mysqlTable("livestock_species_settings", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  species: varchar("species", { length: 50 }).notNull(),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  trackingMode: mysqlEnum("tracking_mode", livestockTrackingModeEnum).notNull().default("lot"),
+  lotLabel: varchar("lot_label", { length: 100 }).notNull().default("Lot"),
+  classLabels: json("class_labels")
+    .$type<Record<"ewes" | "rams" | "lambs" | "wethers" | "unknown", string>>()
+    .notNull(),
+  allowPartialLotMoves: boolean("allow_partial_lot_moves").notNull().default(true),
+  allowSplitMerge: boolean("allow_split_merge").notNull().default(true),
+  allowIndividualTracking: boolean("allow_individual_tracking").notNull().default(false),
+  requireCorrectionReason: boolean("require_correction_reason").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const properties = mysqlTable("properties", {
@@ -672,6 +759,144 @@ export const updateFieldAmendmentRecordSchema = baseFieldAmendmentRecordSchema
   .omit({ fieldId: true })
   .partial();
 
+const lotCountSchema = z.coerce.number().int().min(0).max(100000);
+const lotDeltaSchema = z.coerce.number().int().min(-100000).max(100000);
+const lotClassLabelsSchema = z.object({
+  ewes: z.string().min(1).default("Ewes"),
+  rams: z.string().min(1).default("Rams"),
+  lambs: z.string().min(1).default("Lambs"),
+  wethers: z.string().min(1).default("Wethers"),
+  unknown: z.string().min(1).default("Unknown"),
+});
+
+const cleanNullableText = (value: string | null | undefined) => {
+  const trimmed = value?.trim();
+  return trimmed || null;
+};
+
+const baseLivestockLotSchema = z.object({
+  name: z.string().trim().min(1),
+  species: z.string().trim().min(1).default("sheep"),
+  status: z.enum(livestockLotStatusEnum).optional().default("active"),
+  currentFieldId: z.string().trim().optional().nullable().transform(cleanNullableText),
+  ewes: lotCountSchema.optional().default(0),
+  rams: lotCountSchema.optional().default(0),
+  lambs: lotCountSchema.optional().default(0),
+  wethers: lotCountSchema.optional().default(0),
+  unknown: lotCountSchema.optional().default(0),
+  notes: z.string().optional().nullable().transform(cleanNullableText),
+});
+
+export const insertLivestockLotSchema = baseLivestockLotSchema.superRefine((data, ctx) => {
+  const total = data.ewes + data.rams + data.lambs + data.wethers + data.unknown;
+  if (total <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "A lot must contain at least one animal.",
+      path: ["ewes"],
+    });
+  }
+});
+
+export const updateLivestockLotSchema = baseLivestockLotSchema.partial().superRefine((data, ctx) => {
+  const countValues = [data.ewes, data.rams, data.lambs, data.wethers, data.unknown].filter(
+    (value): value is number => value !== undefined,
+  );
+  if (countValues.some((value) => value < 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Lot counts cannot be negative.",
+      path: ["ewes"],
+    });
+  }
+});
+
+export const insertLivestockLotCountEventSchema = z.object({
+  eventType: z.enum(livestockLotEventTypeEnum),
+  eventDate: dateOnlyRequired,
+  ewesDelta: lotDeltaSchema.optional().default(0),
+  ramsDelta: lotDeltaSchema.optional().default(0),
+  lambsDelta: lotDeltaSchema.optional().default(0),
+  wethersDelta: lotDeltaSchema.optional().default(0),
+  unknownDelta: lotDeltaSchema.optional().default(0),
+  relatedLotId: z.string().trim().optional().nullable().transform(cleanNullableText),
+  notes: z.string().optional().nullable().transform(cleanNullableText),
+}).superRefine((data, ctx) => {
+  const totalDelta =
+    data.ewesDelta +
+    data.ramsDelta +
+    data.lambsDelta +
+    data.wethersDelta +
+    data.unknownDelta;
+  if (totalDelta === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Count event must change at least one count.",
+      path: ["ewesDelta"],
+    });
+  }
+  if (data.eventType === "correction" && !data.notes) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Count corrections require a reason.",
+      path: ["notes"],
+    });
+  }
+});
+
+export const moveLivestockLotSchema = z.object({
+  toFieldId: z.string().trim().min(1),
+  movementDate: z
+    .union([z.date(), z.string()])
+    .transform((val, ctx) => {
+      const parsed = typeof val === "string" ? new Date(val) : val;
+      if (Number.isNaN(parsed.getTime())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Movement date must be a valid date.",
+        });
+        return z.NEVER;
+      }
+      return parsed;
+    }),
+  moveEntireLot: z.boolean().optional().default(false),
+  ewes: lotCountSchema.optional().default(0),
+  rams: lotCountSchema.optional().default(0),
+  lambs: lotCountSchema.optional().default(0),
+  wethers: lotCountSchema.optional().default(0),
+  unknown: lotCountSchema.optional().default(0),
+  destinationLotId: z.string().trim().optional().nullable().transform(cleanNullableText),
+  destinationLotName: z.string().trim().optional().nullable().transform(cleanNullableText),
+  notes: z.string().optional().nullable().transform(cleanNullableText),
+}).superRefine((data, ctx) => {
+  const requested = data.ewes + data.rams + data.lambs + data.wethers + data.unknown;
+  if (!data.moveEntireLot && requested <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Partial lot moves must include at least one animal.",
+      path: ["ewes"],
+    });
+  }
+});
+
+export const upsertLivestockSpeciesSettingsSchema = z.object({
+  species: z.string().trim().min(1).default("sheep"),
+  displayName: z.string().trim().min(1).default("Sheep"),
+  trackingMode: z.enum(livestockTrackingModeEnum).default("lot"),
+  lotLabel: z.string().trim().min(1).default("Flock"),
+  classLabels: lotClassLabelsSchema.default({
+    ewes: "Ewes",
+    rams: "Rams",
+    lambs: "Lambs",
+    wethers: "Wethers",
+    unknown: "Unknown",
+  }),
+  allowPartialLotMoves: z.boolean().default(true),
+  allowSplitMerge: z.boolean().default(true),
+  allowIndividualTracking: z.boolean().default(false),
+  requireCorrectionReason: z.boolean().default(true),
+});
+
 export const insertMovementSchema = createInsertSchema(movements)
   .omit({
     id: true,
@@ -972,6 +1197,51 @@ export type AnimalListItem = Animal & {
 };
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 
+export type LivestockLot = typeof livestockLots.$inferSelect;
+export type InsertLivestockLot = z.infer<typeof insertLivestockLotSchema>;
+export type UpdateLivestockLot = z.infer<typeof updateLivestockLotSchema>;
+export type LivestockLotCountEvent = typeof livestockLotCountEvents.$inferSelect;
+export type InsertLivestockLotCountEvent = z.infer<typeof insertLivestockLotCountEventSchema>;
+export type LivestockLotMovement = typeof livestockLotMovements.$inferSelect;
+export type MoveLivestockLotInput = z.infer<typeof moveLivestockLotSchema>;
+export type LivestockSpeciesSettings = typeof livestockSpeciesSettings.$inferSelect;
+export type UpsertLivestockSpeciesSettings = z.infer<typeof upsertLivestockSpeciesSettingsSchema>;
+export type LivestockLotListItem = LivestockLot & {
+  currentFieldName?: string | null;
+  propertyName?: string | null;
+  totalCount: number;
+};
+export type LivestockInventoryByField = {
+  property: string;
+  field: string;
+  fieldId: string;
+  dairy: number;
+  beef: number;
+  ai: number;
+  sheepEwes: number;
+  sheepRams: number;
+  sheepLambs: number;
+  sheepWethers: number;
+  sheepUnknown: number;
+  sheepTotal: number;
+};
+export type LivestockRecentMovement = {
+  id: string;
+  movementKind: "animal" | "lot";
+  movementDate: Date | string;
+  notes?: string | null;
+  fromFieldName?: string | null;
+  toFieldName?: string | null;
+  tagNumber?: string | null;
+  lotName?: string | null;
+  species?: string | null;
+  ewesMoved?: number;
+  ramsMoved?: number;
+  lambsMoved?: number;
+  wethersMoved?: number;
+  unknownMoved?: number;
+};
+
 export type Property = typeof properties.$inferSelect;
 export type InsertProperty = z.infer<typeof insertPropertySchema>;
 
@@ -1011,6 +1281,12 @@ export type CalvingRecord = typeof calvingRecords.$inferSelect;
 
 export type InsertSlaughterRecord = z.infer<typeof insertSlaughterRecordSchema>;
 export type SlaughterRecord = typeof slaughterRecords.$inferSelect;
+
+export type InsertNote = z.infer<typeof insertNoteSchema>;
+export type Note = typeof notes.$inferSelect;
+
+export type InsertBreedingRecord = z.infer<typeof insertBreedingRecordSchema>;
+export type BreedingRecord = typeof breedingRecords.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 

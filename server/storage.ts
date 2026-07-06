@@ -17,6 +17,10 @@ import {
   users,
   notes,
   breedingRecords,
+  livestockLots,
+  livestockLotCountEvents,
+  livestockLotMovements,
+  livestockSpeciesSettings,
   type Animal,
   type AnimalDueDateStatus,
   type AnimalListItem,
@@ -47,6 +51,18 @@ import {
   type BreedingRecord,
   type InsertBreedingRecord,
   type PolledStatus,
+  type LivestockLot,
+  type LivestockLotListItem,
+  type InsertLivestockLot,
+  type UpdateLivestockLot,
+  type LivestockLotCountEvent,
+  type InsertLivestockLotCountEvent,
+  type LivestockLotMovement,
+  type MoveLivestockLotInput,
+  type LivestockSpeciesSettings,
+  type UpsertLivestockSpeciesSettings,
+  type LivestockInventoryByField,
+  type LivestockRecentMovement,
 } from "@shared/schema";
 
 console.log("DB check:", typeof (db as any).insert, typeof (db as any).select);
@@ -127,6 +143,95 @@ const addDateOnlyDays = (date: Date, days: number) => {
   next.setUTCDate(next.getUTCDate() + days);
   return next;
 };
+
+const lotCountKeys = ["ewes", "rams", "lambs", "wethers", "unknown"] as const;
+type LotCountKey = (typeof lotCountKeys)[number];
+type LotCounts = Record<LotCountKey, number>;
+
+const defaultSheepClassLabels: Record<LotCountKey, string> = {
+  ewes: "Ewes",
+  rams: "Rams",
+  lambs: "Lambs",
+  wethers: "Wethers",
+  unknown: "Unknown",
+};
+
+const defaultSheepSettings: UpsertLivestockSpeciesSettings = {
+  species: "sheep",
+  displayName: "Sheep",
+  trackingMode: "lot",
+  lotLabel: "Flock",
+  classLabels: defaultSheepClassLabels,
+  allowPartialLotMoves: true,
+  allowSplitMerge: true,
+  allowIndividualTracking: false,
+  requireCorrectionReason: true,
+};
+
+const isMissingLivestockTableError = (error: any) =>
+  error?.code === "ER_NO_SUCH_TABLE" &&
+  typeof error?.message === "string" &&
+  error.message.includes("livestock_");
+
+const getLotCounts = (lot: Pick<LivestockLot, LotCountKey>): LotCounts => ({
+  ewes: Number(lot.ewes || 0),
+  rams: Number(lot.rams || 0),
+  lambs: Number(lot.lambs || 0),
+  wethers: Number(lot.wethers || 0),
+  unknown: Number(lot.unknown || 0),
+});
+
+const getLotTotal = (counts: Partial<Record<LotCountKey, number>> | Pick<LivestockLot, LotCountKey>) =>
+  lotCountKeys.reduce((sum, key) => sum + Number((counts as any)[key] || 0), 0);
+
+const getMoveCounts = (input: MoveLivestockLotInput, source: LivestockLot): LotCounts => {
+  if (input.moveEntireLot) {
+    return getLotCounts(source);
+  }
+  return {
+    ewes: Number(input.ewes || 0),
+    rams: Number(input.rams || 0),
+    lambs: Number(input.lambs || 0),
+    wethers: Number(input.wethers || 0),
+    unknown: Number(input.unknown || 0),
+  };
+};
+
+const subtractLotCounts = (source: LivestockLot, moved: LotCounts): LotCounts => {
+  const current = getLotCounts(source);
+  return {
+    ewes: current.ewes - moved.ewes,
+    rams: current.rams - moved.rams,
+    lambs: current.lambs - moved.lambs,
+    wethers: current.wethers - moved.wethers,
+    unknown: current.unknown - moved.unknown,
+  };
+};
+
+const addLotCounts = (lot: LivestockLot, added: LotCounts): LotCounts => {
+  const current = getLotCounts(lot);
+  return {
+    ewes: current.ewes + added.ewes,
+    rams: current.rams + added.rams,
+    lambs: current.lambs + added.lambs,
+    wethers: current.wethers + added.wethers,
+    unknown: current.unknown + added.unknown,
+  };
+};
+
+const ensureNonNegativeLotCounts = (counts: LotCounts) => {
+  const negativeKey = lotCountKeys.find((key) => counts[key] < 0);
+  if (negativeKey) {
+    throw new Error(`Cannot reduce ${negativeKey} below zero.`);
+  }
+};
+
+const toLotListItem = (
+  lot: LivestockLot & { currentFieldName?: string | null; propertyName?: string | null },
+): LivestockLotListItem => ({
+  ...(lot as any),
+  totalCount: getLotTotal(lot),
+});
 
 const addDateOnlyMonths = (date: Date, months: number) => {
   const firstOfTargetMonth = new Date(
@@ -301,6 +406,24 @@ export interface IStorage {
   getAnimalsReadyToBreed(): Promise<Animal[]>;
   getOffspringByParentId(parentId: string): Promise<Animal[]>;
 
+  // Livestock lots
+  createLivestockLot(lot: InsertLivestockLot): Promise<LivestockLot>;
+  getAllLivestockLots(): Promise<LivestockLotListItem[]>;
+  getLivestockLotById(id: string): Promise<LivestockLotListItem | undefined>;
+  updateLivestockLot(id: string, lot: UpdateLivestockLot): Promise<LivestockLot | undefined>;
+  deleteLivestockLot(id: string): Promise<void>;
+  createLivestockLotCountEvent(
+    lotId: string,
+    event: InsertLivestockLotCountEvent,
+  ): Promise<LivestockLotCountEvent>;
+  getLivestockLotCountEvents(lotId: string): Promise<LivestockLotCountEvent[]>;
+  moveLivestockLot(lotId: string, movement: MoveLivestockLotInput): Promise<LivestockLotMovement>;
+  getRecentLivestockMovements(limit?: number): Promise<LivestockRecentMovement[]>;
+  getLivestockSpeciesSettings(species?: string): Promise<LivestockSpeciesSettings[]>;
+  upsertLivestockSpeciesSettings(
+    settings: UpsertLivestockSpeciesSettings,
+  ): Promise<LivestockSpeciesSettings>;
+
   // Properties
   createProperty(property: InsertProperty): Promise<Property>;
   getAllProperties(): Promise<Property[]>;
@@ -329,14 +452,7 @@ export interface IStorage {
     record: InsertFieldAmendmentRecord,
   ): Promise<FieldAmendmentRecord | undefined>;
   deleteFieldAmendmentRecord(id: string): Promise<void>;
-  getCurrentAnimalCountByField(): Promise<{
-    property: string;
-    field: string;
-    fieldId: string;
-    dairy: number;
-    beef: number;
-    ai: number;
-  }[]>;
+  getCurrentAnimalCountByField(): Promise<LivestockInventoryByField[]>;
 
   // Movements
   createMovement(movement: InsertMovement): Promise<Movement>;
@@ -686,6 +802,413 @@ export class DatabaseStorage implements IStorage {
     })) as Animal[];
   }
 
+  // ---------- Livestock Lots ----------
+
+  async createLivestockLot(lot: InsertLivestockLot): Promise<LivestockLot> {
+    const id = crypto.randomUUID();
+    const now = new Date();
+
+    await db.transaction(async (tx) => {
+      await tx.insert(livestockLots).values({
+        ...(lot as any),
+        id,
+        updatedAt: now,
+      });
+
+      await tx.insert(livestockLotCountEvents).values({
+        id: crypto.randomUUID(),
+        lotId: id,
+        eventType: "created",
+        eventDate: formatDateOnly(getTodayDateOnly()) as any,
+        ewesDelta: lot.ewes,
+        ramsDelta: lot.rams,
+        lambsDelta: lot.lambs,
+        wethersDelta: lot.wethers,
+        unknownDelta: lot.unknown,
+        notes: lot.notes ?? null,
+      });
+    });
+
+    const [created] = await db.select().from(livestockLots).where(eq(livestockLots.id, id));
+    return created as LivestockLot;
+  }
+
+  async getAllLivestockLots(): Promise<LivestockLotListItem[]> {
+    try {
+      const result = await db
+        .select({
+          id: livestockLots.id,
+          name: livestockLots.name,
+          species: livestockLots.species,
+          status: livestockLots.status,
+          currentFieldId: livestockLots.currentFieldId,
+          ewes: livestockLots.ewes,
+          rams: livestockLots.rams,
+          lambs: livestockLots.lambs,
+          wethers: livestockLots.wethers,
+          unknown: livestockLots.unknown,
+          notes: livestockLots.notes,
+          createdAt: livestockLots.createdAt,
+          updatedAt: livestockLots.updatedAt,
+          currentFieldName: fields.name,
+          propertyName: properties.name,
+        })
+        .from(livestockLots)
+        .leftJoin(fields, eq(livestockLots.currentFieldId, fields.id))
+        .leftJoin(properties, eq(fields.propertyId, properties.id))
+        .orderBy(livestockLots.name);
+
+      return result.map((lot) => toLotListItem(lot as any));
+    } catch (error: any) {
+      if (isMissingLivestockTableError(error)) return [];
+      throw error;
+    }
+  }
+
+  async getLivestockLotById(id: string): Promise<LivestockLotListItem | undefined> {
+    const [lot] = await db
+      .select({
+        id: livestockLots.id,
+        name: livestockLots.name,
+        species: livestockLots.species,
+        status: livestockLots.status,
+        currentFieldId: livestockLots.currentFieldId,
+        ewes: livestockLots.ewes,
+        rams: livestockLots.rams,
+        lambs: livestockLots.lambs,
+        wethers: livestockLots.wethers,
+        unknown: livestockLots.unknown,
+        notes: livestockLots.notes,
+        createdAt: livestockLots.createdAt,
+        updatedAt: livestockLots.updatedAt,
+        currentFieldName: fields.name,
+        propertyName: properties.name,
+      })
+      .from(livestockLots)
+      .leftJoin(fields, eq(livestockLots.currentFieldId, fields.id))
+      .leftJoin(properties, eq(fields.propertyId, properties.id))
+      .where(eq(livestockLots.id, id));
+
+    return lot ? toLotListItem(lot as any) : undefined;
+  }
+
+  async updateLivestockLot(id: string, lot: UpdateLivestockLot): Promise<LivestockLot | undefined> {
+    const existing = await this.getLivestockLotById(id);
+    if (!existing) return undefined;
+
+    const updateData: Record<string, unknown> = { ...(lot as any), updatedAt: new Date() };
+    const nextCounts = {
+      ...getLotCounts(existing),
+      ...Object.fromEntries(
+        lotCountKeys
+          .filter((key) => Object.prototype.hasOwnProperty.call(lot, key))
+          .map((key) => [key, Number((lot as any)[key] ?? 0)]),
+      ),
+    } as LotCounts;
+    ensureNonNegativeLotCounts(nextCounts);
+    if (getLotTotal(nextCounts) <= 0) {
+      throw new Error("A lot must contain at least one animal.");
+    }
+
+    await db.update(livestockLots).set(updateData as any).where(eq(livestockLots.id, id));
+    const [updated] = await db.select().from(livestockLots).where(eq(livestockLots.id, id));
+    return updated as LivestockLot | undefined;
+  }
+
+  async deleteLivestockLot(id: string): Promise<void> {
+    await db.delete(livestockLots).where(eq(livestockLots.id, id));
+  }
+
+  async createLivestockLotCountEvent(
+    lotId: string,
+    event: InsertLivestockLotCountEvent,
+  ): Promise<LivestockLotCountEvent> {
+    const lot = await this.getLivestockLotById(lotId);
+    if (!lot) throw new Error("Lot not found");
+
+    const nextCounts: LotCounts = {
+      ewes: lot.ewes + event.ewesDelta,
+      rams: lot.rams + event.ramsDelta,
+      lambs: lot.lambs + event.lambsDelta,
+      wethers: lot.wethers + event.wethersDelta,
+      unknown: lot.unknown + event.unknownDelta,
+    };
+    ensureNonNegativeLotCounts(nextCounts);
+
+    const id = crypto.randomUUID();
+    await db.transaction(async (tx) => {
+      await tx.update(livestockLots)
+        .set({
+          ...nextCounts,
+          status: getLotTotal(nextCounts) === 0 ? "inactive" : lot.status,
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(livestockLots.id, lotId));
+
+      await tx.insert(livestockLotCountEvents).values({
+        ...(event as any),
+        id,
+        lotId,
+      });
+    });
+
+    const [created] = await db
+      .select()
+      .from(livestockLotCountEvents)
+      .where(eq(livestockLotCountEvents.id, id));
+    return created as LivestockLotCountEvent;
+  }
+
+  async getLivestockLotCountEvents(lotId: string): Promise<LivestockLotCountEvent[]> {
+    return await db
+      .select()
+      .from(livestockLotCountEvents)
+      .where(eq(livestockLotCountEvents.lotId, lotId))
+      .orderBy(desc(livestockLotCountEvents.eventDate), desc(livestockLotCountEvents.createdAt));
+  }
+
+  async moveLivestockLot(lotId: string, movement: MoveLivestockLotInput): Promise<LivestockLotMovement> {
+    const source = await this.getLivestockLotById(lotId);
+    if (!source) throw new Error("Lot not found");
+
+    const field = await this.getFieldById(movement.toFieldId);
+    if (!field) throw new Error("Invalid destination field");
+
+    const movedCounts = getMoveCounts(movement, source);
+    if (getLotTotal(movedCounts) <= 0) {
+      throw new Error("Move must include at least one animal.");
+    }
+
+    const remainingCounts = subtractLotCounts(source, movedCounts);
+    ensureNonNegativeLotCounts(remainingCounts);
+
+    const sourceCounts = getLotCounts(source);
+    const isWholeLotMove =
+      lotCountKeys.every((key) => movedCounts[key] === sourceCounts[key]);
+    const movementId = crypto.randomUUID();
+    let destinationLotId = movement.destinationLotId ?? null;
+
+    await db.transaction(async (tx) => {
+      if (isWholeLotMove) {
+        destinationLotId = null;
+        await tx.update(livestockLots)
+          .set({ currentFieldId: movement.toFieldId, updatedAt: new Date() } as any)
+          .where(eq(livestockLots.id, lotId));
+      } else {
+        let destinationLot: LivestockLot | undefined;
+        if (destinationLotId) {
+          const [existingDestination] = await tx
+            .select()
+            .from(livestockLots)
+            .where(eq(livestockLots.id, destinationLotId));
+          destinationLot = existingDestination as LivestockLot | undefined;
+          if (!destinationLot) throw new Error("Destination lot not found");
+          if (destinationLot.species !== source.species) {
+            throw new Error("Destination lot must use the same species.");
+          }
+          const destinationCounts = addLotCounts(destinationLot, movedCounts);
+          await tx.update(livestockLots)
+            .set({
+              ...destinationCounts,
+              currentFieldId: movement.toFieldId,
+              status: "active",
+              updatedAt: new Date(),
+            } as any)
+            .where(eq(livestockLots.id, destinationLot.id));
+        } else {
+          destinationLotId = crypto.randomUUID();
+          await tx.insert(livestockLots).values({
+            id: destinationLotId,
+            name: movement.destinationLotName || `${source.name} split`,
+            species: source.species,
+            status: "active",
+            currentFieldId: movement.toFieldId,
+            ...movedCounts,
+            notes: movement.notes ?? null,
+            updatedAt: new Date(),
+          } as any);
+        }
+
+        await tx.update(livestockLots)
+          .set({
+            ...remainingCounts,
+            status: getLotTotal(remainingCounts) === 0 ? "inactive" : source.status,
+            currentFieldId: getLotTotal(remainingCounts) === 0 ? null : source.currentFieldId,
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(livestockLots.id, lotId));
+
+        const eventDate = formatDateOnly(parseDateOnly(movement.movementDate) ?? getTodayDateOnly());
+        await tx.insert(livestockLotCountEvents).values([
+          {
+            id: crypto.randomUUID(),
+            lotId,
+            eventType: "split",
+            eventDate: eventDate as any,
+            ewesDelta: -movedCounts.ewes,
+            ramsDelta: -movedCounts.rams,
+            lambsDelta: -movedCounts.lambs,
+            wethersDelta: -movedCounts.wethers,
+            unknownDelta: -movedCounts.unknown,
+            relatedLotId: destinationLotId,
+            notes: movement.notes ?? null,
+          },
+          {
+            id: crypto.randomUUID(),
+            lotId: destinationLotId,
+            eventType: "split",
+            eventDate: eventDate as any,
+            ewesDelta: movedCounts.ewes,
+            ramsDelta: movedCounts.rams,
+            lambsDelta: movedCounts.lambs,
+            wethersDelta: movedCounts.wethers,
+            unknownDelta: movedCounts.unknown,
+            relatedLotId: lotId,
+            notes: movement.notes ?? null,
+          },
+        ] as any);
+      }
+
+      await tx.insert(livestockLotMovements).values({
+        id: movementId,
+        lotId,
+        destinationLotId,
+        fromFieldId: source.currentFieldId,
+        toFieldId: movement.toFieldId,
+        movementDate: movement.movementDate,
+        ewesMoved: movedCounts.ewes,
+        ramsMoved: movedCounts.rams,
+        lambsMoved: movedCounts.lambs,
+        wethersMoved: movedCounts.wethers,
+        unknownMoved: movedCounts.unknown,
+        notes: movement.notes ?? null,
+      });
+    });
+
+    const [created] = await db
+      .select()
+      .from(livestockLotMovements)
+      .where(eq(livestockLotMovements.id, movementId));
+    return created as LivestockLotMovement;
+  }
+
+  async getRecentLivestockMovements(limit: number = 10): Promise<LivestockRecentMovement[]> {
+    const fromFields = alias(fields, "lot_from_fields");
+    const toFields = alias(fields, "lot_to_fields");
+
+    const animalMoves = await this.getRecentMovements(limit);
+    let lotMoves: any[] = [];
+    try {
+      lotMoves = await db
+        .select({
+          id: livestockLotMovements.id,
+          movementDate: livestockLotMovements.movementDate,
+          notes: livestockLotMovements.notes,
+          lotName: livestockLots.name,
+          species: livestockLots.species,
+          fromFieldName: fromFields.name,
+          toFieldName: toFields.name,
+          ewesMoved: livestockLotMovements.ewesMoved,
+          ramsMoved: livestockLotMovements.ramsMoved,
+          lambsMoved: livestockLotMovements.lambsMoved,
+          wethersMoved: livestockLotMovements.wethersMoved,
+          unknownMoved: livestockLotMovements.unknownMoved,
+        })
+        .from(livestockLotMovements)
+        .leftJoin(livestockLots, eq(livestockLotMovements.lotId, livestockLots.id))
+        .leftJoin(fromFields, eq(livestockLotMovements.fromFieldId, fromFields.id))
+        .leftJoin(toFields, eq(livestockLotMovements.toFieldId, toFields.id))
+        .orderBy(desc(livestockLotMovements.movementDate))
+        .limit(limit);
+    } catch (error: any) {
+      if (!isMissingLivestockTableError(error)) throw error;
+    }
+
+    const combined: LivestockRecentMovement[] = [
+      ...animalMoves.map((movement: any) => ({
+        id: movement.id,
+        movementKind: "animal" as const,
+        movementDate: movement.movementDate,
+        notes: movement.notes,
+        fromFieldName: movement.fromFieldName,
+        toFieldName: movement.toFieldName,
+        tagNumber: movement.tagNumber,
+      })),
+      ...lotMoves.map((movement) => ({
+        ...(movement as any),
+        movementKind: "lot" as const,
+      })),
+    ];
+
+    return combined
+      .sort((a, b) => new Date(b.movementDate as any).getTime() - new Date(a.movementDate as any).getTime())
+      .slice(0, limit);
+  }
+
+  async getLivestockSpeciesSettings(species?: string): Promise<LivestockSpeciesSettings[]> {
+    try {
+      if (!species || species === "sheep") {
+        const [sheep] = await db
+          .select()
+          .from(livestockSpeciesSettings)
+          .where(eq(livestockSpeciesSettings.species, "sheep"));
+        if (!sheep) {
+          await this.upsertLivestockSpeciesSettings(defaultSheepSettings);
+        }
+      }
+
+      const query = db.select().from(livestockSpeciesSettings);
+      const rows = species
+        ? await query.where(eq(livestockSpeciesSettings.species, species))
+        : await query.orderBy(livestockSpeciesSettings.displayName);
+      return rows as LivestockSpeciesSettings[];
+    } catch (error: any) {
+      if (isMissingLivestockTableError(error) && (!species || species === "sheep")) {
+        return [{
+          id: "default-sheep-settings",
+          ...defaultSheepSettings,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as LivestockSpeciesSettings];
+      }
+      if (isMissingLivestockTableError(error)) return [];
+      throw error;
+    }
+  }
+
+  async upsertLivestockSpeciesSettings(
+    settings: UpsertLivestockSpeciesSettings,
+  ): Promise<LivestockSpeciesSettings> {
+    const [existing] = await db
+      .select()
+      .from(livestockSpeciesSettings)
+      .where(eq(livestockSpeciesSettings.species, settings.species));
+
+    if (existing) {
+      await db
+        .update(livestockSpeciesSettings)
+        .set({ ...(settings as any), updatedAt: new Date() })
+        .where(eq(livestockSpeciesSettings.id, existing.id));
+      const [updated] = await db
+        .select()
+        .from(livestockSpeciesSettings)
+        .where(eq(livestockSpeciesSettings.id, existing.id));
+      return updated as LivestockSpeciesSettings;
+    }
+
+    const id = crypto.randomUUID();
+    await db.insert(livestockSpeciesSettings).values({
+      ...(settings as any),
+      id,
+      updatedAt: new Date(),
+    });
+    const [created] = await db
+      .select()
+      .from(livestockSpeciesSettings)
+      .where(eq(livestockSpeciesSettings.id, id));
+    return created as LivestockSpeciesSettings;
+  }
+
   // ---------- Properties ----------
 
   async createProperty(property: InsertProperty): Promise<Property> {
@@ -919,30 +1442,103 @@ export class DatabaseStorage implements IStorage {
     await db.delete(fieldAmendmentRecords).where(eq(fieldAmendmentRecords.id, id));
   }
 
-  async getCurrentAnimalCountByField(): Promise<{
-    property: string;
-    field: string;
-    fieldId: string;
-    dairy: number;
-    beef: number;
-    ai: number;
-  }[]> {
-    const result = await db
-      .select({
-        property: properties.name,
-        field: fields.name,
-        fieldId: fields.id,
-        dairy: sql<number>`count(case when ${animals.type} = 'dairy' then 1 end)`,
-        beef: sql<number>`count(case when ${animals.type} = 'beef' then 1 end)`,
-        ai: sql<number>`count(case when ${animals.type} = 'ai' then 1 end)`,
-      })
-      .from(fields)
-      .innerJoin(properties, eq(fields.propertyId, properties.id))
-      .innerJoin(animals, eq(fields.id, animals.currentFieldId))
-      .where(sql`(${animals.status} = 'active' or ${animals.status} is null)`)
-      .groupBy(fields.id, fields.name, properties.id, properties.name);
+  async getCurrentAnimalCountByField(): Promise<LivestockInventoryByField[]> {
+    const [fieldRows, animalRows] = await Promise.all([
+      db
+        .select({
+          property: properties.name,
+          field: fields.name,
+          fieldId: fields.id,
+        })
+        .from(fields)
+        .innerJoin(properties, eq(fields.propertyId, properties.id)),
+      db
+        .select({
+          currentFieldId: animals.currentFieldId,
+          type: animals.type,
+        })
+        .from(animals)
+        .where(sql`${animals.currentFieldId} is not null and (${animals.status} = 'active' or ${animals.status} is null)`),
+    ]);
 
-    return result;
+    let lotRows: {
+      currentFieldId: string | null;
+      species: string;
+      ewes: number;
+      rams: number;
+      lambs: number;
+      wethers: number;
+      unknown: number;
+    }[] = [];
+
+    try {
+      lotRows = await db
+        .select({
+          currentFieldId: livestockLots.currentFieldId,
+          species: livestockLots.species,
+          ewes: livestockLots.ewes,
+          rams: livestockLots.rams,
+          lambs: livestockLots.lambs,
+          wethers: livestockLots.wethers,
+          unknown: livestockLots.unknown,
+        })
+        .from(livestockLots)
+        .where(sql`${livestockLots.currentFieldId} is not null and ${livestockLots.status} = 'active'`);
+    } catch (error: any) {
+      if (!isMissingLivestockTableError(error)) throw error;
+    }
+
+    const fieldMeta = new Map(fieldRows.map((field) => [field.fieldId, field]));
+    const byField = new Map<string, LivestockInventoryByField>();
+
+    const ensureRow = (fieldId: string) => {
+      const existing = byField.get(fieldId);
+      if (existing) return existing;
+      const meta = fieldMeta.get(fieldId);
+      const row: LivestockInventoryByField = {
+        property: meta?.property ?? "Unknown property",
+        field: meta?.field ?? "Unknown field",
+        fieldId,
+        dairy: 0,
+        beef: 0,
+        ai: 0,
+        sheepEwes: 0,
+        sheepRams: 0,
+        sheepLambs: 0,
+        sheepWethers: 0,
+        sheepUnknown: 0,
+        sheepTotal: 0,
+      };
+      byField.set(fieldId, row);
+      return row;
+    };
+
+    for (const animal of animalRows) {
+      if (!animal.currentFieldId) continue;
+      const row = ensureRow(animal.currentFieldId);
+      const normalizedType = String(animal.type ?? "").trim().toLowerCase();
+      if (normalizedType === "dairy") row.dairy += 1;
+      else if (normalizedType === "beef") row.beef += 1;
+      else if (normalizedType === "ai") row.ai += 1;
+    }
+
+    for (const lot of lotRows) {
+      if (!lot.currentFieldId) continue;
+      const row = ensureRow(lot.currentFieldId);
+      if (String(lot.species).trim().toLowerCase() === "sheep") {
+        row.sheepEwes += Number(lot.ewes || 0);
+        row.sheepRams += Number(lot.rams || 0);
+        row.sheepLambs += Number(lot.lambs || 0);
+        row.sheepWethers += Number(lot.wethers || 0);
+        row.sheepUnknown += Number(lot.unknown || 0);
+        row.sheepTotal += getLotTotal(lot as any);
+      }
+    }
+
+    return Array.from(byField.values()).sort((a, b) => {
+      if (a.property !== b.property) return a.property.localeCompare(b.property);
+      return a.field.localeCompare(b.field);
+    });
   }
 
   // ---------- Movements ----------

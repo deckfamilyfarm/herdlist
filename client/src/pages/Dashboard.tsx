@@ -2,17 +2,28 @@ import { HerdStatCard } from "@/components/HerdStatCard";
 import { MovementHistoryTimeline } from "@/components/MovementHistoryTimeline";
 import { HerdCompositionChart } from "@/components/HerdCompositionChart";
 import { AnimalTable } from "@/components/AnimalTable";
-import { Beef, Milk, TrendingUp, Activity, Heart, Cpu } from "lucide-react";
+import { Beef, Milk, TrendingUp, Heart, Cpu, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { AnimalFormDialog } from "@/components/AnimalFormDialog";
 import { useQuery } from "@tanstack/react-query";
-import type { Animal } from "@shared/schema";
+import type { Animal, LivestockRecentMovement } from "@shared/schema";
 import { useLocation } from "wouter";
 
 interface DashboardStats {
   totalAnimals: number;
+  totalLotHead: number;
+  totalLivestockHead: number;
+  totalLivingAnimals: number;
+  activeLots: number;
+  sheepCounts: {
+    ewes: number;
+    rams: number;
+    lambs: number;
+    wethers: number;
+    unknown: number;
+  };
   cowsReadyToBreed: number;
   animalsByType: Record<string, number>;
   animalsBySex: Record<string, number>;
@@ -25,15 +36,12 @@ interface FieldCount {
   dairy: number;
   beef: number;
   ai: number;
-}
-
-interface Movement {
-  id: string;
-  animalId: string;
-  fromFieldId: string | null;
-  toFieldId: string;
-  movementDate: string;
-  notes?: string | null;
+  sheepEwes: number;
+  sheepRams: number;
+  sheepLambs: number;
+  sheepWethers: number;
+  sheepUnknown: number;
+  sheepTotal: number;
 }
 
 export default function Dashboard() {
@@ -52,7 +60,7 @@ export default function Dashboard() {
     queryKey: ['/api/animals'],
   });
 
-  const { data: recentMovements = [] } = useQuery<Movement[]>({
+  const { data: recentMovements = [] } = useQuery<LivestockRecentMovement[]>({
     queryKey: ['/api/movements/recent'],
   });
 
@@ -61,6 +69,10 @@ export default function Dashboard() {
     return normalizedStatus === "" || normalizedStatus === "active";
   });
   const displayAnimals = activeRecentAnimals.slice(0, 5);
+  const aiCount = stats?.animalsByType?.ai || 0;
+  const individualLivingCount = Math.max(0, (stats?.totalAnimals || 0) - aiCount);
+  const totalLivingAnimals =
+    stats?.totalLivingAnimals ?? individualLivingCount + (stats?.totalLotHead || 0);
   const sortedFieldCounts = [...(fieldCountsData || [])].sort((a, b) => {
     if (a.property !== b.property) {
       return a.property.localeCompare(b.property);
@@ -91,9 +103,10 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <HerdStatCard
-          title="Total Animals"
-          value={stats?.totalAnimals || 0}
+          title="Total Living Animals"
+          value={totalLivingAnimals}
           icon={TrendingUp}
+          subtitle={`${individualLivingCount} individual / ${stats?.totalLotHead || 0} lot head`}
         />
         <HerdStatCard
           title="Dairy Cows"
@@ -111,15 +124,16 @@ export default function Dashboard() {
           icon={Cpu}
         />
         <HerdStatCard
+          title="Sheep"
+          value={stats?.totalLotHead || 0}
+          icon={Layers}
+          subtitle={`${stats?.sheepCounts?.ewes || 0} ewes / ${stats?.sheepCounts?.lambs || 0} lambs`}
+        />
+        <HerdStatCard
           title="Cows Ready to Breed"
           value={stats?.cowsReadyToBreed || 0}
           icon={Heart}
           subtitle="56+ days post-calving"
-        />
-        <HerdStatCard
-          title="Active Breeding"
-          value={stats?.animalsBySex?.female || 0}
-          icon={Activity}
         />
       </div>
 
@@ -127,6 +141,8 @@ export default function Dashboard() {
         <div className="lg:col-span-2">
           <HerdCompositionChart
             data={sortedFieldCounts}
+            showAi={false}
+            showSheepClasses={false}
             onFieldClick={(fieldId) => setLocation(`/animals?fieldId=${encodeURIComponent(fieldId)}`)}
           />
         </div>
