@@ -17,6 +17,7 @@ import Reports from "@/pages/Reports";
 import SlaughterReport from "@/pages/SlaughterReport";
 import Import from "@/pages/Import";
 import Admin from "@/pages/Admin";
+import Help from "@/pages/Help";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 
@@ -38,6 +39,7 @@ function Router() {
           <Route path="/slaughter" component={SlaughterReport} />
           <Route path="/import" component={Import} />
           <Route path="/admin" component={Admin} />
+          <Route path="/help" component={Help} />
         </>
       )}
       <Route component={NotFound} />

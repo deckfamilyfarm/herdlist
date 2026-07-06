@@ -11,7 +11,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Home, Layers, List, MapPin, Upload, BarChart3, Scale, LogOut, Shield } from "lucide-react";
+import { BookOpen, Home, Layers, List, MapPin, Upload, BarChart3, Scale, LogOut, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -51,6 +51,11 @@ const menuItems = [
     title: "Import Data",
     url: "/import",
     icon: Upload,
+  },
+  {
+    title: "Help",
+    url: "/help",
+    icon: BookOpen,
   },
   {
     title: "Access",
