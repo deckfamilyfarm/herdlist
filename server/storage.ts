@@ -400,7 +400,7 @@ export interface IStorage {
   // Animals
   createAnimal(animal: InsertAnimal): Promise<Animal>;
   getAllAnimals(): Promise<AnimalListItem[]>;
-  getAnimalById(id: string): Promise<Animal | undefined>;
+  getAnimalById(id: string): Promise<AnimalListItem | undefined>;
   updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined>;
   deleteAnimal(id: string): Promise<void>;
   getAnimalsReadyToBreed(): Promise<Animal[]>;
@@ -705,11 +705,10 @@ export class DatabaseStorage implements IStorage {
     })) as AnimalListItem[];
   }
 
-  async getAnimalById(id: string): Promise<Animal | undefined> {
-    const [animal] = await db.select().from(animals).where(eq(animals.id, id));
-    return animal
-      ? ({ ...(animal as any), polled: normalizePolledStatus((animal as any).polled), tags: (animal as any).tags ?? [] } as Animal)
-      : undefined;
+  async getAnimalById(id: string): Promise<AnimalListItem | undefined> {
+    // Use the same enriched representation as the list endpoint so API clients
+    // receive location names, parent tags, and due-date information consistently.
+    return (await this.getAllAnimals()).find((animal) => animal.id === id);
   }
 
   async updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined> {

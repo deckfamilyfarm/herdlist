@@ -308,6 +308,35 @@ export const isAuthenticated: RequestHandler = (req, res, next) => {
   res.status(401).json({ message: "Unauthorized" });
 };
 
+function getBearerToken(authorization: string | undefined) {
+  const match = authorization?.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || "";
+}
+
+/**
+ * Authorizes existing Herd List admin sessions or a Timesheets access token.
+ * Bearer tokens are verified with Timesheets on every request so revocation and
+ * role changes take effect without creating a second Herd List session.
+ */
+export const isAdminOrTimesheetsBearer: RequestHandler = async (req: any, res, next) => {
+  if (req.isAuthenticated?.() && req.user) {
+    return isAdmin(req, res, next);
+  }
+
+  const accessToken = getBearerToken(req.get("authorization"));
+  if (!accessToken) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    req.user = await authenticateTimesheetsAccessToken(accessToken);
+    return next();
+  } catch (error: any) {
+    console.warn("Timesheets bearer authentication failed:", error?.message || error);
+    return res.status(401).json({ message: "Invalid or unauthorized Timesheets access token" });
+  }
+};
+
 export const isAdmin: RequestHandler = async (req: any, res, next) => {
   if (!req.isAuthenticated() || !req.user) {
     return res.status(401).json({ message: "Unauthorized" });

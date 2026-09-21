@@ -5,6 +5,7 @@ import {
   setupAuth,
   isAuthenticated,
   isAdmin,
+  isAdminOrTimesheetsBearer,
   hashPassword,
   verifyPassword,
   generateResetToken,
@@ -117,6 +118,20 @@ const bulkRemoveTagsSchema = z.object({
   animalIds: z.array(z.string().min(1)).min(1),
   tags: z.array(z.string()).min(1),
 });
+
+const animalQuerySchema = z.object({
+  q: z.string().trim().min(1).optional(),
+  tagNumber: z.string().trim().min(1).optional(),
+  status: z.string().trim().min(1).optional(),
+  type: z.string().trim().min(1).optional(),
+  sex: z.string().trim().min(1).optional(),
+  fieldId: z.string().trim().min(1).optional(),
+  herdName: z.string().trim().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
+});
+
+const normalizedEquals = (value: unknown, expected: string) =>
+  String(value ?? "").trim().toLowerCase() === expected.toLowerCase();
 
 function sanitizeReturnTo(value: unknown) {
   const returnTo = String(value || "/");
@@ -492,11 +507,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Animals routes (protected by isAdmin)
-  app.get("/api/animals", isAdmin, async (req, res) => {
+  app.get("/api/animals", isAdminOrTimesheetsBearer, async (req, res) => {
     try {
-      const animals = await storage.getAllAnimals();
-      res.json(animals);
+      const query = animalQuerySchema.parse(req.query);
+      const search = query.q?.toLowerCase();
+      const animals = (await storage.getAllAnimals()).filter((animal) => {
+        if (query.tagNumber && !normalizedEquals(animal.tagNumber, query.tagNumber)) return false;
+        if (query.status && !normalizedEquals(animal.status, query.status)) return false;
+        if (query.type && !normalizedEquals(animal.type, query.type)) return false;
+        if (query.sex && !normalizedEquals(animal.sex, query.sex)) return false;
+        if (query.fieldId && animal.currentFieldId !== query.fieldId) return false;
+        if (query.herdName && !normalizedEquals(animal.herdName, query.herdName)) return false;
+        if (
+          search &&
+          ![animal.tagNumber, animal.phenotype, animal.currentFieldName]
+            .some((value) => String(value ?? "").toLowerCase().includes(search))
+        ) return false;
+        return true;
+      });
+      res.json(query.limit ? animals.slice(0, query.limit) : animals);
     } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid animal query", errors: error.errors });
+      }
       res.status(500).json({ message: error.message });
     }
   });
@@ -515,7 +548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/animals/:id", isAdmin, async (req, res) => {
+  app.get("/api/animals/:id", isAdminOrTimesheetsBearer, async (req, res) => {
     try {
       const animal = await storage.getAnimalById(req.params.id);
       if (!animal) {
@@ -611,7 +644,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/animals/:id/offspring", isAdmin, async (req, res) => {
+  app.get("/api/animals/:id/offspring", isAdminOrTimesheetsBearer, async (req, res) => {
     try {
       const offspring = await storage.getOffspringByParentId(req.params.id);
       res.json(offspring);

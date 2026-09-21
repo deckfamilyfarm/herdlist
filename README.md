@@ -2,6 +2,8 @@
 
 A comprehensive livestock management application for dairy and beef cattle operations. Track breeding records, animal locations, movements, vaccinations, health events, calving history, and slaughter records.
 
+For Dairy Choreboard and other Timesheets-authenticated integrations, see the [Animal API integration guide](./DAIRY_CHOREBOARD_API.md).
+
 ## Features
 
 - 🐄 **Animal Management**: Track individual animals with tag numbers, breeding info, and lineage
@@ -174,10 +176,10 @@ See `database-schema.sql` for complete schema definition.
 
 ### Animal Endpoints
 
-- `GET /api/animals` - List all animals
-- `GET /api/animals/:id` - Get animal by ID
+- `GET /api/animals` - List or query animals (session or Timesheets bearer token)
+- `GET /api/animals/:id` - Get animal by ID (session or Timesheets bearer token)
 - `POST /api/animals` - Create new animal
-- `PATCH /api/animals/:id` - Update animal
+- `PUT /api/animals/:id` - Update animal
 - `DELETE /api/animals/:id` - Delete animal
 - `GET /api/animals/:id/offspring` - Get animal's offspring
 
