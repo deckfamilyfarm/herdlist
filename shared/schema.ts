@@ -1194,6 +1194,8 @@ export type AnimalListItem = Animal & {
   dueDate: string | null;
   dueDateStatus: AnimalDueDateStatus | null;
   dueDateBreedingRecordId: string | null;
+  lastCalvingDate?: string | null;
+  lastBreedingDate?: string | null;
 };
 export type InsertAnimal = z.infer<typeof insertAnimalSchema>;
 

@@ -702,6 +702,13 @@ export class DatabaseStorage implements IStorage {
       tags: (animal as any).tags ?? [],
       polled: normalizePolledStatus((animal as any).polled),
       ...getDueDateInfo(animal.id, animal.sex),
+      // Expose existing reproduction records to authenticated animal-list clients.
+      // Include offspring DOBs, as the due-date calculation already does.
+      lastCalvingDate: (calvingDatesByDamId.get(animal.id) ?? [])
+        .map(formatDateOnly).sort().at(-1) ?? null,
+      lastBreedingDate: breedingDatesByAnimalId.get(animal.id)?.[0]
+        ? formatDateOnly(breedingDatesByAnimalId.get(animal.id)![0].firstExposureDate)
+        : null,
     })) as AnimalListItem[];
   }
 
