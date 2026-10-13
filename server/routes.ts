@@ -857,7 +857,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Fields routes
-  app.get("/api/fields", isAdmin, async (req, res) => {
+  app.get("/api/fields", isAdminOrTimesheetsBearer, async (req, res) => {
     try {
       const fields = await storage.getAllFields();
       res.json(fields);
@@ -1092,7 +1092,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/movements", isAdmin, async (_req, res) => {
+  app.get("/api/movements", isAdminOrTimesheetsBearer, async (_req, res) => {
     try {
       const movements = await storage.getAllMovements();
       res.json(movements);
@@ -1274,7 +1274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Slaughter/Sold Records routes
-  app.get("/api/slaughter-records", isAdmin, async (req, res) => {
+  app.get("/api/slaughter-records", isAdminOrTimesheetsBearer, async (req, res) => {
     try {
       const records = await storage.getAllSlaughterRecords();
       res.json(records);
