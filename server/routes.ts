@@ -71,6 +71,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { historyEntrySchema, historyCorrectionSchema } from "../shared/movementHistory";
+import { locationChangeSchema } from "../shared/animalLocations";
 import Papa from "papaparse";
 
 const normalizeDateInput = (value: string) => {
@@ -544,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: "Validation error", errors: error.errors });
       } else {
-        res.status(500).json({ message: error.message });
+        res.status(error.statusCode || 500).json({ message: error.message });
       }
     }
   });
@@ -564,8 +565,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/animals/:id", isAdmin, async (req, res) => {
     try {
-      const validatedData = insertAnimalSchema.partial().parse(req.body);
-      const animal = await storage.updateAnimal(req.params.id, validatedData);
+      const { locationChange, ...validatedData } = insertAnimalSchema.partial()
+        .extend({ locationChange: locationChangeSchema.optional() }).parse(req.body);
+      const animal = await storage.updateAnimal(req.params.id, validatedData, locationChange);
       if (!animal) {
         res.status(404).json({ message: "Animal not found" });
         return;
@@ -575,7 +577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: "Validation error", errors: error.errors });
       } else {
-        res.status(500).json({ message: error.message });
+        res.status(error.statusCode || 500).json({ message: error.message });
       }
     }
   });
@@ -1108,7 +1110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: "Validation error", errors: error.errors });
       } else {
-        res.status(500).json({ message: error.message });
+        res.status(error.statusCode || 500).json({ message: error.message });
       }
     }
   });
@@ -1450,11 +1452,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       switch (type) {
         case "animals": {
           const validAnimals: InsertAnimal[] = [];
+          const fieldIds = new Set((await storage.getAllFields()).map((field) => field.id));
           
           for (let i = 0; i < parsed.data.length; i++) {
             const row = parsed.data[i];
             try {
               const csvRow = csvAnimalSchema.parse(row);
+              if ((csvRow.status || "active") === "active" && !csvRow.currentFieldId)
+                throw new Error("Active animals require currentFieldId in the import.");
+              if (csvRow.currentFieldId && !fieldIds.has(csvRow.currentFieldId))
+                throw new Error("currentFieldId must refer to an existing location.");
               
               let sireId: string | undefined;
               let damId: string | undefined;
@@ -1476,7 +1483,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 dateOfBirth: csvRow.dateOfBirth || null,
                 sireId: sireId || null,
                 damId: damId || null,
-                currentFieldId: null,
+                currentFieldId: csvRow.currentFieldId || null,
+                status: csvRow.status || "active",
                 herdName: csvRow.herdName || null,
                 organic: csvRow.organic || false,
                 phenotype: csvRow.phenotype || null,

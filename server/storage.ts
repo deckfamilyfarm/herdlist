@@ -1,6 +1,9 @@
 import { db, pool } from "./db";
 import { saveMovementHistory } from "./movementHistory";
 import type { HistoryEntry, HistoryCorrection } from "../shared/movementHistory";
+import type { LocationChange } from "../shared/animalLocations";
+import { locationToday } from "../shared/animalLocations";
+import { locationProblem, recordLocationChange, requireAnimalLocation } from "./animalLocations";
 import { eq, sql, and, or, gte, desc, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
@@ -403,7 +406,7 @@ export interface IStorage {
   createAnimal(animal: InsertAnimal): Promise<Animal>;
   getAllAnimals(): Promise<AnimalListItem[]>;
   getAnimalById(id: string): Promise<AnimalListItem | undefined>;
-  updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined>;
+  updateAnimal(id: string, animal: Partial<InsertAnimal>, locationChange?: LocationChange): Promise<Animal | undefined>;
   deleteAnimal(id: string): Promise<void>;
   getAnimalsReadyToBreed(): Promise<Animal[]>;
   getOffspringByParentId(parentId: string): Promise<Animal[]>;
@@ -551,10 +554,11 @@ export class DatabaseStorage implements IStorage {
     const id = crypto.randomUUID();
     const polledValue = normalizePolledStatus((animal as any).polled);
 
-    await db.insert(animals).values({
-      ...(animal as any),
-      polled: polledValue,
-      id,
+    await db.transaction(async (tx) => {
+      await requireAnimalLocation(tx, animal.status, animal.currentFieldId);
+      await tx.insert(animals).values({ ...(animal as any), polled: polledValue, id });
+      if (animal.currentFieldId) await recordLocationChange(tx, id, null, animal.currentFieldId,
+        new Date(`${locationToday()}T00:00:00Z`), "Initial location recorded when animal was added");
     });
 
     const [created] = await db.select().from(animals).where(eq(animals.id, id));
@@ -722,7 +726,7 @@ export class DatabaseStorage implements IStorage {
     return (await this.getAllAnimals()).find((animal) => animal.id === id);
   }
 
-  async updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined> {
+  async updateAnimal(id: string, animal: Partial<InsertAnimal>, locationChange?: LocationChange): Promise<Animal | undefined> {
     const updateData: Partial<InsertAnimal> = { ...(animal as any) };
     if (Object.prototype.hasOwnProperty.call(animal, "polled")) {
       updateData.polled = normalizePolledStatus((animal as any).polled);
@@ -731,7 +735,20 @@ export class DatabaseStorage implements IStorage {
       updateData.tags = (animal as any).tags;
     }
 
-    await db.update(animals).set(updateData).where(eq(animals.id, id));
+    await db.transaction(async (tx) => {
+      const [previous] = await tx.select().from(animals).where(eq(animals.id, id)).for("update");
+      if (!previous) return;
+      const fieldId = updateData.currentFieldId === undefined ? previous.currentFieldId : updateData.currentFieldId;
+      await requireAnimalLocation(tx, updateData.status || previous.status, fieldId);
+      if (fieldId !== previous.currentFieldId && fieldId) {
+        if (!locationChange) throw locationProblem(400, "A location change requires its actual effective date.");
+        if (locationChange.expectedFieldId !== previous.currentFieldId)
+          throw locationProblem(409, "The animal's location changed since you opened it. Refresh and review before saving.");
+        await recordLocationChange(tx, id, previous.currentFieldId, fieldId,
+          new Date(`${locationChange.date}T00:00:00Z`), "Location changed in animal editor");
+      }
+      await tx.update(animals).set(updateData).where(eq(animals.id, id));
+    });
     const [updated] = await db.select().from(animals).where(eq(animals.id, id));
     return updated
       ? ({ ...(updated as any), polled: normalizePolledStatus((updated as any).polled), tags: (updated as any).tags ?? [] } as Animal)
@@ -1244,7 +1261,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProperty(id: string): Promise<void> {
-    const [{ count }] = await db
+    await db.transaction(async (tx) => {
+    const propertyFields = await tx.select({ id: fields.id }).from(fields)
+      .where(eq(fields.propertyId, id)).for("update");
+    const fieldIds = propertyFields.map((field) => field.id);
+    const [{ count }] = await tx
       .select({ count: sql<number>`count(*)` })
       .from(animals)
       .innerJoin(fields, eq(animals.currentFieldId, fields.id))
@@ -1254,26 +1275,19 @@ export class DatabaseStorage implements IStorage {
       throw new Error("You must remove animals from this property before deleting it.");
     }
 
-    const propertyFields = await db
-      .select({ id: fields.id })
-      .from(fields)
-      .where(eq(fields.propertyId, id));
-    const fieldIds = propertyFields.map((field) => field.id);
-
     if (fieldIds.length > 0) {
-      await db.delete(hayRecords).where(inArray(hayRecords.fieldId, fieldIds));
-      await db
+      const [history] = await tx.select({ id: movements.id }).from(movements)
+        .where(or(inArray(movements.fromFieldId, fieldIds), inArray(movements.toFieldId, fieldIds))).limit(1);
+      if (history) throw locationProblem(400, "This property has locations referenced by movement history and cannot be deleted.");
+      await tx.delete(hayRecords).where(inArray(hayRecords.fieldId, fieldIds));
+      await tx
         .delete(fieldAmendmentRecords)
         .where(inArray(fieldAmendmentRecords.fieldId, fieldIds));
-      await db
-        .update(movements)
-        .set({ fromFieldId: null })
-        .where(inArray(movements.fromFieldId, fieldIds));
-      await db.delete(movements).where(inArray(movements.toFieldId, fieldIds));
-      await db.delete(fields).where(eq(fields.propertyId, id));
+      await tx.delete(fields).where(eq(fields.propertyId, id));
     }
 
-    await db.delete(properties).where(eq(properties.id, id));
+    await tx.delete(properties).where(eq(properties.id, id));
+    });
   }
 
   // ---------- Fields ----------
@@ -1305,7 +1319,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteField(id: string): Promise<void> {
-    const [{ count }] = await db
+    await db.transaction(async (tx) => {
+    await tx.select({ id: fields.id }).from(fields).where(eq(fields.id, id)).for("update");
+    const [{ count }] = await tx
       .select({ count: sql<number>`count(*)` })
       .from(animals)
       .where(eq(animals.currentFieldId, id));
@@ -1314,14 +1330,13 @@ export class DatabaseStorage implements IStorage {
       throw new Error("You must remove animals from this field before deleting it.");
     }
 
-    await db
-      .update(movements)
-      .set({ fromFieldId: null })
-      .where(eq(movements.fromFieldId, id));
-    await db.delete(movements).where(eq(movements.toFieldId, id));
-    await db.delete(hayRecords).where(eq(hayRecords.fieldId, id));
-    await db.delete(fieldAmendmentRecords).where(eq(fieldAmendmentRecords.fieldId, id));
-    await db.delete(fields).where(eq(fields.id, id));
+    const [history] = await tx.select({ id: movements.id }).from(movements)
+      .where(or(eq(movements.fromFieldId, id), eq(movements.toFieldId, id))).limit(1);
+    if (history) throw locationProblem(400, "This location is referenced by movement history and cannot be deleted.");
+    await tx.delete(hayRecords).where(eq(hayRecords.fieldId, id));
+    await tx.delete(fieldAmendmentRecords).where(eq(fieldAmendmentRecords.fieldId, id));
+    await tx.delete(fields).where(eq(fields.id, id));
+    });
   }
 
   async createHayRecord(record: InsertHayRecord): Promise<HayRecordWithMetrics> {
@@ -1562,15 +1577,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMovement(movement: InsertMovement): Promise<Movement> {
-    const id = crypto.randomUUID();
-    await db.insert(movements).values({ ...(movement as any), id });
-
-    if (movement.toFieldId) {
-      await db
-        .update(animals)
-        .set({ currentFieldId: movement.toFieldId })
-        .where(eq(animals.id, movement.animalId));
-    }
+    const id = await db.transaction(async (tx) => {
+      const [animal] = await tx.select().from(animals).where(eq(animals.id, movement.animalId)).for("update");
+      if (!animal) throw locationProblem(404, "Animal not found.");
+      if (animal.status !== "active") throw locationProblem(400, "Use movement history to repair an inactive animal's past records.");
+      if (movement.fromFieldId && movement.fromFieldId !== animal.currentFieldId)
+        throw locationProblem(409, "From location differs from the animal's current location. Refresh and review before moving.");
+      const id = await recordLocationChange(tx, animal.id, animal.currentFieldId, movement.toFieldId,
+        movement.movementDate, movement.notes || null);
+      await tx.update(animals).set({ currentFieldId: movement.toFieldId }).where(eq(animals.id, animal.id));
+      return id;
+    });
 
     const [created] = await db.select().from(movements).where(eq(movements.id, id));
     return created as Movement;
@@ -2012,32 +2029,17 @@ export class DatabaseStorage implements IStorage {
     options?: { movementDate?: Date; note?: string },
   ): Promise<void> {
     if (animalIds.length === 0) return;
-    const movementDate = options?.movementDate ?? new Date();
+    const movementDate = options?.movementDate ?? new Date(`${locationToday()}T00:00:00Z`);
     const note = options?.note ?? null;
 
-    const currentStates = await db
-      .select({
-        id: animals.id,
-        currentFieldId: animals.currentFieldId,
-      })
-      .from(animals)
-      .where(inArray(animals.id, animalIds));
-
     await db.transaction(async (tx) => {
-      await tx.update(animals).set({ currentFieldId: fieldId }).where(inArray(animals.id, animalIds));
-
-      const movementRows = currentStates.map((animal) => ({
-        id: crypto.randomUUID(),
-        animalId: animal.id,
-        fromFieldId: animal.currentFieldId,
-        toFieldId: fieldId,
-        movementDate,
-        notes: note,
-      }));
-
-      if (movementRows.length > 0) {
-        await tx.insert(movements).values(movementRows);
+      const currentStates = await tx.select().from(animals).where(inArray(animals.id, animalIds)).orderBy(animals.id).for("update");
+      if (currentStates.length !== new Set(animalIds).size) throw locationProblem(404, "One or more animals no longer exist.");
+      for (const animal of currentStates) {
+        if (animal.status !== "active") throw locationProblem(400, "Bulk moves require Active animals. Use history to repair past records.");
+        await recordLocationChange(tx, animal.id, animal.currentFieldId, fieldId, movementDate, note);
       }
+      await tx.update(animals).set({ currentFieldId: fieldId }).where(inArray(animals.id, animalIds));
     });
   }
 
@@ -2084,7 +2086,12 @@ export class DatabaseStorage implements IStorage {
     }));
 
     try {
-      await db.insert(animals).values(withIds);
+      await db.transaction(async (tx) => {
+        for (const animal of withIds) await requireAnimalLocation(tx, animal.status, animal.currentFieldId);
+        await tx.insert(animals).values(withIds);
+        for (const animal of withIds) if (animal.currentFieldId)
+          await recordLocationChange(tx, animal.id, null, animal.currentFieldId, new Date(`${locationToday()}T00:00:00Z`), "Initial location recorded at import");
+      });
       return [];
     } catch (err: any) {
       console.error("bulkCreateAnimals DB error:", {

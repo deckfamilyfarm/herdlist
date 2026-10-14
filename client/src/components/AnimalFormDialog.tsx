@@ -30,6 +30,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { InsertAnimal, Animal, Field, AnimalStatus, PolledStatus } from "@shared/schema";
 import { animalStatusEnum, polledStatusEnum, animalTagOptions } from "@shared/schema";
+import type { LocationChange } from "@shared/animalLocations";
+import { locationToday } from "@shared/animalLocations";
 
 interface AnimalFormDialogProps {
   open: boolean;
@@ -73,6 +75,8 @@ const isAllowedAnimalDobYear = (value: string) => {
 
 export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: AnimalFormDialogProps) {
   const { toast } = useToast();
+  const [locationDate, setLocationDate] = useState(locationToday);
+  useEffect(() => { if (open) setLocationDate(locationToday()); }, [open]);
   const [formData, setFormData] = useState<{
     tagNumber: string;
     type: string;
@@ -222,6 +226,10 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
 
  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.status === "active" && !formData.currentFieldId) {
+      toast({ title: "Location required", description: "Choose a current location for this Active animal.", variant: "destructive" });
+      return;
+    }
     if (!isAllowedAnimalDobYear(formData.dateOfBirth)) {
       toast({
         title: "Invalid date of birth",
@@ -231,14 +239,14 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       return;
     }
 
-    const submitData: InsertAnimal = {
+    const submitData: InsertAnimal & { locationChange?: LocationChange } = {
       tagNumber: formData.tagNumber,
       type: formData.type,
       sex: formData.sex,
       dateOfBirth: formData.dateOfBirth || undefined,
       sireId: formData.sireId || null,
       damId: formData.damId || null,
-      currentFieldId: formData.currentFieldId || undefined,
+      currentFieldId: formData.currentFieldId || null,
       organic: Boolean(formData.organic),
       status: formData.status,
       phenotype: formData.phenotype.trim() || null,
@@ -246,6 +254,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       polled: formData.polled || "not tested",
       tags: formData.tags,
     };
+    if (animal && formData.currentFieldId && formData.currentFieldId !== (animal.currentFieldId || "")) {
+      submitData.locationChange = { date: locationDate, expectedFieldId: animal.currentFieldId || null };
+    }
     
     if (animal) {
       updateAnimalMutation.mutate(submitData);
@@ -427,7 +438,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
             </Popover>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="currentFieldId">Current Location</Label>
+            <Label htmlFor="currentFieldId">Current Location{formData.status === "active" ? " *" : ""}</Label>
             <Select
               value={formData.currentFieldId || "none"}
               onValueChange={(value) =>
@@ -435,7 +446,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               }
             >
               <SelectTrigger id="currentFieldId" data-testid="select-current-field">
-                <SelectValue placeholder="Select field (optional)" />
+                <SelectValue placeholder="Select current field" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Not assigned</SelectItem>
@@ -447,6 +458,12 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               </SelectContent>
             </Select>
           </div>
+
+          {animal && formData.currentFieldId && formData.currentFieldId !== (animal.currentFieldId || "") && <div className="space-y-2">
+            <Label htmlFor="location-effective-date">Location effective date *</Label>
+            <Input id="location-effective-date" type="date" required max={locationToday()} value={locationDate} onChange={(event) => setLocationDate(event.target.value)} />
+            <p className="text-sm text-muted-foreground">Saving this location also records a movement on this date. Use movement history for corrections before the latest move.</p>
+          </div>}
 
           {/* Status selector with slaughtered/sold disabled + note */}
           <div className="space-y-2">

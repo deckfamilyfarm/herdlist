@@ -34,6 +34,22 @@ to verify validation and permissions. Set `HERDLIST_TEST_MYSQL_CNF` to a local
 MySQL client file with a Unix socket to also exercise actual transactions on
 connection-local temporary tables, without writing production data.
 
+## Location integrity
+
+Location integrity is enforced on new writes: Active animals require an existing
+current field; creation/import records an initial location on the Pacific entry
+date. Changing a location in the animal editor requires `locationChange` with
+`date` and `expectedFieldId`, and saves both the movement and animal together.
+Normal moves derive and verify their origin from the locked animal record;
+backdated changes before the latest movement use the history correction editor.
+Bulk moves are atomic, and locations/properties referenced by movement history
+cannot be deleted. Existing missing locations and inconsistent legacy origins
+still require review; they are not silently backfilled.
+
+Run `tests/animal-location-integrity.test.mjs` with `HERDLIST_TEST_MYSQL_CNF` to
+exercise these guarantees on temporary local MySQL tables, including rejected
+stale edits and bulk rollback. No production records are modified by the test.
+
 ## Technology Stack
 
 **Frontend:**
