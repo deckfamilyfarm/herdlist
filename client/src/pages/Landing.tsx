@@ -41,7 +41,7 @@ export default function Landing() {
       await apiRequest("POST", "/api/auth/login", { username, password });
 
       // Login successful, reload to trigger app to recognize auth state
-      window.location.href = "/";
+      window.location.reload();
     } catch (error: any) {
       toast({
         title: "Login Failed",

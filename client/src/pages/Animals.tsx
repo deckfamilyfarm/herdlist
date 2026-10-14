@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -94,6 +94,22 @@ export default function Animals() {
   });
 
   const selectedFieldIdFromQuery = new URLSearchParams(search).get("fieldId");
+  const animalIdFromQuery = new URLSearchParams(search).get("animalId");
+  const editFromQuery = new URLSearchParams(search).get("edit") === "1";
+  const openedLink = useRef("");
+
+  useEffect(() => {
+    if (!animalIdFromQuery) { openedLink.current = ""; return; }
+    const key = `${animalIdFromQuery}:${editFromQuery}`;
+    if (openedLink.current === key) return;
+    const animal = animals.find((value) => value.id === animalIdFromQuery);
+    if (!animal) return;
+    openedLink.current = key;
+    setStatusFilter("all");
+    setSearchTerm(animal.tagNumber);
+    if (editFromQuery) { setEditingAnimal(animal); setDialogOpen(true); }
+    else { setSelectedAnimal(animal); setDetailDialogOpen(true); }
+  }, [animalIdFromQuery, editFromQuery, animals]);
 
   useEffect(() => {
     if (selectedFieldIdFromQuery) {

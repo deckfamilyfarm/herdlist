@@ -32,7 +32,12 @@ test("grazing reads accept verified Timesheets tokens and admin sessions while w
         contents: name === "./db" ? "export const pool = {};" : `export const storage = {
           getUser: async () => ({ id: 'admin', isAdmin: 'yes' }),
           getAllFields: async () => [{ id: 'pasture', name: 'Pond Field' }],
-          getAllMovements: async () => [], getAllSlaughterRecords: async () => []
+          getAllMovements: async () => [], getAllSlaughterRecords: async () => [],
+          createHistoricalMovement: async (animalId, entry) => ({ animalId, ...entry }),
+          correctHistoricalMovement: async (id, correction) => {
+            if (id === 'stale') throw Object.assign(new Error('Changed since opened'), { statusCode: 409 });
+            return { id, ...correction.entry };
+          }
         };`, loader: "js",
       }));
       builder.onLoad({ filter: /server\/routes\.ts$/ }, async ({ path: filename }) => {
@@ -86,5 +91,22 @@ test("grazing reads accept verified Timesheets tokens and admin sessions while w
       }, body: "{}" })).status, 401);
     }
     assert.equal(verifications, 9);
+    const entry = { fromFieldId: null, toFieldId: "pasture", movementDate: "2026-09-01T00:00:00.000Z", notes: null };
+    for (const [path, method, body] of [
+      ["/api/animals/animal-1/movement-history", "POST", entry],
+      ["/api/movements/move-1", "PUT", { entry, expected: entry }],
+    ]) {
+      const send = (data, headers = {}) => fetch(base + path, { method, headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(data) });
+      assert.equal((await send(body)).status, 401);
+      assert.equal((await send(body, { Authorization: `Bearer ${valid}` })).status, 401);
+      const admin = { "x-fixture-admin": "yes" };
+      assert.equal((await send(body, admin)).status, method === "POST" ? 201 : 200);
+      assert.equal((await send({ ...body, animalId: "other-animal" }, admin)).status, 400);
+      const invalid = { ...entry, movementDate: "2026-02-30T00:00:00.000Z" };
+      assert.equal((await send(method === "POST" ? invalid : { entry: invalid, expected: entry }, admin)).status, 400);
+    }
+    assert.equal((await fetch(base + "/api/movements/stale", {
+      method: "PUT", headers: { "Content-Type": "application/json", "x-fixture-admin": "yes" }, body: JSON.stringify({ entry, expected: entry }),
+    })).status, 409);
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });

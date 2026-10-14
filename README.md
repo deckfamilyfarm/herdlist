@@ -14,6 +14,26 @@ For Dairy Choreboard and other Timesheets-authenticated integrations, see the [A
 - 🔐 **Authentication**: Secure email/password login with admin/user roles
 - 🌙 **Dark Mode**: Theme toggle for comfortable viewing
 
+## Correcting history from Dairy
+
+Dairy's Unknown animal-days report opens `/movements?animalId=ID` to review an
+animal's full movement history. Use **Add missing historical movement** or
+**Correct this movement** to save the actual date, from/to locations, and notes.
+These history repairs preserve the current animal location. For current
+location, status, or birth-date corrections, `/animals?animalId=ID&edit=1` opens
+the animal editor, including inactive animals. Both links survive login.
+
+History repairs require the existing HerdList admin session. The corresponding
+endpoints are POST `/api/animals/:animalId/movement-history` and PUT
+`/api/movements/:id`. Updates include both `entry` and `expected` values; stale
+edits return 409. Dates and field IDs are validated before a transaction commits.
+The animal assignment and creation timestamp of existing movements are retained.
+
+Run `node --test tests/grazing-read-access.test.mjs tests/movement-history.test.mjs`
+to verify validation and permissions. Set `HERDLIST_TEST_MYSQL_CNF` to a local
+MySQL client file with a Unix socket to also exercise actual transactions on
+connection-local temporary tables, without writing production data.
+
 ## Technology Stack
 
 **Frontend:**

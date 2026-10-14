@@ -70,6 +70,7 @@ import {
   type CsvNoteRow,
 } from "@shared/schema";
 import { z } from "zod";
+import { historyEntrySchema, historyCorrectionSchema } from "../shared/movementHistory";
 import Papa from "papaparse";
 
 const normalizeDateInput = (value: string) => {
@@ -1078,6 +1079,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Movements routes
+  app.post("/api/animals/:animalId/movement-history", isAdmin, async (req, res) => {
+    try {
+      const entry = historyEntrySchema.parse(req.body);
+      res.status(201).json(await storage.createHistoricalMovement(req.params.animalId, entry));
+    } catch (error: any) {
+      res.status(error instanceof z.ZodError ? 400 : error.statusCode || 500)
+        .json({ message: error instanceof z.ZodError ? "Choose valid history dates and locations." : error.message });
+    }
+  });
+
+  app.put("/api/movements/:id", isAdmin, async (req, res) => {
+    try {
+      const correction = historyCorrectionSchema.parse(req.body);
+      res.json(await storage.correctHistoricalMovement(req.params.id, correction));
+    } catch (error: any) {
+      res.status(error instanceof z.ZodError ? 400 : error.statusCode || 500)
+        .json({ message: error instanceof z.ZodError ? "Choose valid history dates and locations." : error.message });
+    }
+  });
+
   app.post("/api/movements", isAdmin, async (req, res) => {
     try {
       const validatedData = insertMovementSchema.parse(req.body);

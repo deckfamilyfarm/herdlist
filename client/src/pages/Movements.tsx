@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MovementHistoryTimeline } from "@/components/MovementHistoryTimeline";
 import { IndividualAnimalSelector } from "@/components/IndividualAnimalSelector";
+import { AnimalMovementHistory } from "@/components/AnimalMovementHistory";
+import { useSearch } from "wouter";
 import { MoveHorizontal } from "lucide-react";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -21,6 +23,7 @@ import type { Animal, Field, InsertMovement, LivestockRecentMovement } from "@sh
 
 export default function Movements() {
   const { toast } = useToast();
+  const animalId = new URLSearchParams(useSearch()).get("animalId");
   const formatTypeLabel = (type: string) => {
     const normalizedType = type.trim().toLowerCase();
     return normalizedType === "ai" ? "AI" : type;
@@ -41,6 +44,7 @@ export default function Movements() {
   const { data: fields = [] } = useQuery<Field[]>({
     queryKey: ['/api/fields'],
   });
+  const historyAnimal = animals.find((animal) => animal.id === animalId);
 
   const { data: recentMovements = [] } = useQuery<LivestockRecentMovement[]>({
     queryKey: ['/api/movements/recent'],
@@ -142,6 +146,8 @@ export default function Movements() {
         <h1 className="text-2xl font-semibold" data-testid="text-page-title">Move Animals</h1>
         <p className="text-muted-foreground">Transfer animals between fields and track movements</p>
       </div>
+
+      {historyAnimal && <AnimalMovementHistory key={historyAnimal.id} animal={historyAnimal} fields={fields} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">

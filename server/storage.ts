@@ -1,4 +1,6 @@
 import { db, pool } from "./db";
+import { saveMovementHistory } from "./movementHistory";
+import type { HistoryEntry, HistoryCorrection } from "../shared/movementHistory";
 import { eq, sql, and, or, gte, desc, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
@@ -456,6 +458,8 @@ export interface IStorage {
 
   // Movements
   createMovement(movement: InsertMovement): Promise<Movement>;
+  createHistoricalMovement(animalId: string, entry: HistoryEntry): Promise<unknown>;
+  correctHistoricalMovement(id: string, correction: HistoryCorrection): Promise<unknown>;
   getAllMovements(): Promise<Movement[]>;
   getMovementsByAnimalId(animalId: string): Promise<Movement[]>;
   getRecentMovements(limit?: number): Promise<Movement[]>;
@@ -1548,6 +1552,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ---------- Movements ----------
+
+  async createHistoricalMovement(animalId: string, entry: HistoryEntry) {
+    return saveMovementHistory(pool, { animalId, entry });
+  }
+
+  async correctHistoricalMovement(id: string, correction: HistoryCorrection) {
+    return saveMovementHistory(pool, { id, ...correction });
+  }
 
   async createMovement(movement: InsertMovement): Promise<Movement> {
     const id = crypto.randomUUID();
