@@ -27,6 +27,7 @@ import {
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { animalStatusLabels } from "@/lib/animalStatus";
 import { useToast } from "@/hooks/use-toast";
 import type { InsertAnimal, Animal, Field, AnimalStatus, PolledStatus } from "@shared/schema";
 import { animalStatusEnum, polledStatusEnum, animalTagOptions } from "@shared/schema";
@@ -490,7 +491,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                   }
                   return (
                     <SelectItem key={status} value={status}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                      {animalStatusLabels[status]}
                     </SelectItem>
                   );
                 })}

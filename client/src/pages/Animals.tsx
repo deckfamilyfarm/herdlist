@@ -23,6 +23,7 @@ import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { animalStatusLabels } from "@/lib/animalStatus";
 import { useToast } from "@/hooks/use-toast";
 import { useSearch } from "wouter";
 import {
@@ -645,7 +646,7 @@ export default function Animals() {
             onValueChange={(val) => setStatusFilter(val as StatusFilter)}
           >
             <SelectTrigger
-              className="w-full sm:w-44"
+              className="w-full sm:w-56"
               data-testid="select-filter-status"
             >
               <SelectValue placeholder="Status" />
@@ -654,7 +655,7 @@ export default function Animals() {
               <SelectItem value="all">All Statuses</SelectItem>
               {animalStatusEnum.map((status) => (
                 <SelectItem key={status} value={status}>
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                  {animalStatusLabels[status]}
                 </SelectItem>
               ))}
             </SelectContent>

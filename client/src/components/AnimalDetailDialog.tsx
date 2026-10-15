@@ -32,6 +32,7 @@ import type { Vaccination, Event, CalvingRecord, Animal, AnimalStatus, Note, Bre
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { animalStatusLabels } from "@/lib/animalStatus";
 import { Trash2, Pencil } from "lucide-react";
 
 interface AnimalDetailDialogProps {
@@ -40,13 +41,6 @@ interface AnimalDetailDialogProps {
   animal: Animal;
   onEdit?: () => void;
 }
-
-const statusLabel: Record<AnimalStatus, string> = {
-  active: "Active",
-  slaughtered: "Slaughtered",
-  sold: "Sold",
-  expired: "Expired",
-};
 
 const statusVariant: Partial<
   Record<AnimalStatus, "default" | "secondary" | "destructive" | "outline">
@@ -268,7 +262,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                 </Badge>
                 {/* ✅ Status badge */}
                 <Badge variant={statusVariant[animal.status as AnimalStatus] ?? "outline"}>
-                  {statusLabel[animal.status as AnimalStatus] ?? "Active"}
+                  {animalStatusLabels[animal.status as AnimalStatus] ?? "Active"}
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-sm mt-1">
@@ -378,7 +372,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Status</span>
                     <span className="font-medium">
-                      {statusLabel[animal.status as AnimalStatus] ?? "Active"}
+                      {animalStatusLabels[animal.status as AnimalStatus] ?? "Active"}
                     </span>
                   </div>
                 </CardContent>

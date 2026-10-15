@@ -2,6 +2,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Select,
   SelectContent,
@@ -18,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, FileDown, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   Dialog,
@@ -91,6 +100,8 @@ export default function SlaughterReport() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [formData, setFormData] = useState<SlaughterFormData>(createEmptyFormData());
+  const [animalPickerOpen, setAnimalPickerOpen] = useState(false);
+  const [animalSearch, setAnimalSearch] = useState("");
 
   const isEditing = editingRecordId !== null;
 
@@ -104,15 +115,33 @@ export default function SlaughterReport() {
 
   const availableAnimals = useMemo(
     () =>
-      animals.filter((animal) => {
-        const normalizedStatus = String(animal.status ?? "active").trim().toLowerCase();
-        return normalizedStatus === "" || normalizedStatus === "active";
-      }),
+      animals
+        .filter((animal) => {
+          const normalizedStatus = String(animal.status ?? "active").trim().toLowerCase();
+          return normalizedStatus === "" || normalizedStatus === "active";
+        })
+        .sort((a, b) =>
+          a.tagNumber.localeCompare(b.tagNumber, "en", { numeric: true, sensitivity: "base" }) ||
+          a.id.localeCompare(b.id),
+        ),
     [animals],
   );
 
+  const matchingAnimals = useMemo(() => {
+    const search = animalSearch.trim().toLowerCase();
+    return availableAnimals.filter((animal) =>
+      `${animal.tagNumber} ${animal.phenotype ?? ""}`.toLowerCase().includes(search),
+    );
+  }, [availableAnimals, animalSearch]);
+
+  const handleAnimalPickerOpenChange = (open: boolean) => {
+    setAnimalPickerOpen(open);
+    setAnimalSearch("");
+  };
+
   const resetDialog = () => {
     setDialogOpen(false);
+    handleAnimalPickerOpenChange(false);
     setEditingRecordId(null);
     setFormData(createEmptyFormData());
   };
@@ -177,12 +206,14 @@ export default function SlaughterReport() {
   };
 
   const openCreateDialog = () => {
+    handleAnimalPickerOpenChange(false);
     setEditingRecordId(null);
     setFormData(createEmptyFormData());
     setDialogOpen(true);
   };
 
   const openEditDialog = (record: SlaughterRecord) => {
+    handleAnimalPickerOpenChange(false);
     setEditingRecordId(record.id);
     setFormData({
       animalId: record.animalId,
@@ -199,6 +230,11 @@ export default function SlaughterReport() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.animalId) {
+      toast({ title: "Animal required", description: "Select an active animal before saving.", variant: "destructive" });
+      return;
+    }
 
     const isSold = formData.recordType === "sold";
     const submitData: InsertSlaughterRecord = {
@@ -452,24 +488,55 @@ export default function SlaughterReport() {
               {isEditing ? (
                 <Input id="animal" value={getAnimalLabel(formData.animalId)} readOnly data-testid="input-animal-readonly" />
               ) : (
-                <Select
-                  value={formData.animalId}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, animalId: value })
-                  }
-                >
-                  <SelectTrigger id="animal" data-testid="select-animal">
-                    <SelectValue placeholder="Select active animal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableAnimals.map((animal) => (
-                      <SelectItem key={animal.id} value={animal.id}>
-                        {animal.tagNumber}
-                        {animal.phenotype ? ` (${animal.phenotype})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={animalPickerOpen} onOpenChange={handleAnimalPickerOpenChange}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="animal"
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={animalPickerOpen}
+                      aria-controls="slaughter-animal-options"
+                      aria-required="true"
+                      className="w-full justify-between"
+                      data-testid="select-animal"
+                    >
+                      <span className="truncate">
+                        {formData.animalId ? getAnimalLabel(formData.animalId) : "Select active animal"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Search by name, tag or phenotype..."
+                        aria-label="Search animals"
+                        value={animalSearch}
+                        onValueChange={setAnimalSearch}
+                        data-testid="input-animal-search"
+                      />
+                      <CommandList id="slaughter-animal-options">
+                        <CommandEmpty>No matching animals</CommandEmpty>
+                        <CommandGroup>
+                          {matchingAnimals.map((animal) => (
+                            <CommandItem
+                              key={animal.id}
+                              value={animal.id}
+                              onSelect={() => {
+                                setFormData({ ...formData, animalId: animal.id });
+                                handleAnimalPickerOpenChange(false);
+                              }}
+                            >
+                              <Check className={formData.animalId === animal.id ? "opacity-100" : "opacity-0"} />
+                              <span>{getAnimalLabel(animal.id)}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
 

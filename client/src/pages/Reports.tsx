@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ReportFilters } from "@/components/ReportFilters";
+import { animalStatusLabels } from "@/lib/animalStatus";
 import { HerdCompositionChart } from "@/components/HerdCompositionChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -370,7 +371,7 @@ export default function Reports() {
     const typeLabel =
       animalType === "all" ? "All" : animalType === "ai" ? "AI" : animalType.charAt(0).toUpperCase() + animalType.slice(1);
     const statusLabel =
-      status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1);
+      status === "all" ? "All" : animalStatusLabels[status];
     const asOfLabel = asOfDate || new Date().toISOString().split("T")[0];
 
     const selectedFields = Array.from(selectedFieldIds).filter((id) => id !== NO_LOCATION_ID);

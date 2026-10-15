@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { FileDown } from "lucide-react";
 import type { AnimalStatus, Field, Property } from "@shared/schema";
 import { animalStatusEnum, animalTagOptions } from "@shared/schema";
+import { animalStatusLabels } from "@/lib/animalStatus";
 
 export type AnimalTypeFilter = "all" | "dairy" | "beef" | "ai";
 export type StatusFilter = "all" | AnimalStatus;
@@ -280,7 +281,7 @@ export function ReportFilters({
                 <SelectItem value="all">All Statuses</SelectItem>
                 {animalStatusEnum.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                    {animalStatusLabels[s]}
                   </SelectItem>
                 ))}
               </SelectContent>
