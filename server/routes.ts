@@ -72,6 +72,10 @@ import {
 import { z } from "zod";
 import { historyEntrySchema, historyCorrectionSchema } from "../shared/movementHistory";
 import { locationChangeSchema } from "../shared/animalLocations";
+import { grazingServiceRoutes } from "./grazingServiceRoutes";
+import { readAnimalIssues } from "./animalIssueSource";
+import { pool } from "./db";
+import { isServiceDate, serviceToday } from "../shared/grazingServices";
 import Papa from "papaparse";
 
 const normalizeDateInput = (value: string) => {
@@ -153,6 +157,15 @@ function loginUser(req: any, user: any) {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   await setupAuth(app);
+  app.use("/api/grazing-services", grazingServiceRoutes());
+  app.get("/api/reports/animal-issues", isAdmin, async (_req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      res.json(await readAnimalIssues(pool));
+    } catch (error) {
+      res.status(500).json({ message: String(error) });
+    }
+  });
 
   // Auth routes
   app.post('/api/auth/signup', async (req, res) => {
@@ -538,8 +551,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/animals", isAdmin, async (req, res) => {
     try {
-      const validatedData = insertAnimalSchema.parse(req.body);
-      const animal = await storage.createAnimal(validatedData);
+      const { ownerId, ...validatedData } = insertAnimalSchema.extend({ ownerId: z.string().min(1).max(36).optional() }).parse(req.body);
+      const animal = await storage.createAnimal(validatedData, ownerId);
       res.status(201).json(animal);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -565,9 +578,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/animals/:id", isAdmin, async (req, res) => {
     try {
-      const { locationChange, ...validatedData } = insertAnimalSchema.partial()
-        .extend({ locationChange: locationChangeSchema.optional() }).parse(req.body);
-      const animal = await storage.updateAnimal(req.params.id, validatedData, locationChange);
+      const { locationChange, ownerChange, ...validatedData } = insertAnimalSchema.partial()
+        .extend({
+          locationChange: locationChangeSchema.optional(),
+          ownerChange: z.object({
+            ownerId: z.string().min(1).max(36),
+            effectiveDate: z.string().refine((value) => isServiceDate(value) && value <= serviceToday(),
+              "Choose a valid owner date through today"),
+          }).optional(),
+        }).parse(req.body);
+      const animal = await storage.updateAnimal(req.params.id, validatedData, locationChange, ownerChange);
       if (!animal) {
         res.status(404).json({ message: "Animal not found" });
         return;

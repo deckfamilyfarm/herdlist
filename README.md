@@ -10,14 +10,18 @@ For Dairy Choreboard and other Timesheets-authenticated integrations, see the [A
 - 📍 **Location Tracking**: Manage properties and fields, track animal movements
 - 💉 **Health Records**: Vaccination schedules, events, and health monitoring
 - 📊 **Reporting**: Dashboard analytics, slaughter reports, breeding data
+- 🌱 **Grazing Services**: Dated ownership, contracts, seasonal age rates, and monthly head-day charges
 - 📥 **CSV Import**: Bulk import animals, properties, vaccinations, and more
 - 🔐 **Authentication**: Secure email/password login with admin/user roles
 - 🌙 **Dark Mode**: Theme toggle for comfortable viewing
 
-## Correcting history from Dairy
+## Grazing Services and history corrections
 
-Dairy's Unknown animal-days report opens `/movements?animalId=ID` to review an
-animal's full movement history. Use **Add missing historical movement** or
+Open **Grazing Services** at `/grazing-services` to manage monthly contracts and
+review animal-days that cannot be charged. See [Grazing Services rules and setup](./docs/grazing-services.md).
+
+The review list opens `/movements?animalId=ID` to inspect an animal's full
+movement history. Use **Add missing historical movement** or
 **Correct this movement** to save the actual date, from/to locations, and notes.
 These history repairs preserve the current animal location. For current
 location, status, or birth-date corrections, `/animals?animalId=ID&edit=1` opens

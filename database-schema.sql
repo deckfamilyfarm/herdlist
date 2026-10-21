@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS `animals` (
   `polled` ENUM('polled','horned','not tested') DEFAULT 'not tested',
   `herd_name` ENUM('wet', 'nurse', 'finish', 'main', 'grafting', 'yearling', 'missing', 'bull'),
   `status` ENUM('active', 'slaughtered', 'sold', 'expired') NOT NULL DEFAULT 'active',
+  `owner_id` VARCHAR(36),
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -280,3 +281,55 @@ CREATE INDEX `idx_livestock_lot_movements_lot` ON `livestock_lot_movements`(`lot
 CREATE INDEX `idx_livestock_lot_movements_date` ON `livestock_lot_movements`(`movement_date`);
 CREATE INDEX `idx_vaccinations_animal` ON `vaccinations`(`animal_id`);
 CREATE INDEX `idx_events_animal` ON `events`(`animal_id`);
+
+-- Grazing Services. Existing installations use migrations-mysql/20261019_grazing_services.sql.
+CREATE TABLE IF NOT EXISTS `owners` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `name` VARCHAR(255) NOT NULL UNIQUE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `animal_ownership` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `animal_id` VARCHAR(36) NOT NULL,
+  `owner_id` VARCHAR(36) NOT NULL,
+  `effective_date` DATE NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `animal_ownership_animal_date_idx` (`animal_id`, `effective_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `grazing_contracts` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `name` VARCHAR(255) NOT NULL,
+  `owner_id` VARCHAR(36) NOT NULL,
+  `kind` ENUM('dairy', 'general') NOT NULL,
+  `active_from` DATE NOT NULL,
+  `active_to` DATE,
+  `dairy_barn_field_id` VARCHAR(36),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `grazing_assignments` (
+  `id` VARCHAR(36) PRIMARY KEY,
+  `contract_id` VARCHAR(36) NOT NULL,
+  `animal_id` VARCHAR(36) NOT NULL,
+  `start_date` DATE NOT NULL,
+  `end_date` DATE,
+  KEY `grazing_assignments_contract_animal_idx` (`contract_id`, `animal_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `grazing_rates` (
+  `contract_id` VARCHAR(36) NOT NULL,
+  `effective_date` DATE NOT NULL,
+  `rate_cents` INT NOT NULL,
+  `season_start_month` TINYINT UNSIGNED NULL,
+  `season_end_month` TINYINT UNSIGNED NULL,
+  `age_threshold_months` SMALLINT UNSIGNED NULL,
+  `older_rate_cents` INT NULL,
+  `younger_rate_cents` INT NULL,
+  `free_under_months` SMALLINT UNSIGNED NULL,
+  PRIMARY KEY (`contract_id`, `effective_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO `owners` (`id`, `name`) VALUES
+  ('deck-family-farm', 'Deck Family Farm'),
+  ('creamy-cow-llc', 'Creamy Cow, LLC');

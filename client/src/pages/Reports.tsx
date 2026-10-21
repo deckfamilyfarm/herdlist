@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import AnimalIssuesReport from "./AnimalIssuesReport";
 
 import type { AnimalListItem, Field, Property, AnimalStatus, Movement, SlaughterRecord, LivestockLotListItem } from "@shared/schema";
 import type { AnimalTypeFilter, DueDateFilter, ReportGrouping, StatusFilter } from "@/components/ReportFilters";
@@ -139,7 +140,7 @@ const normalizeTags = (tags: unknown): string[] => {
   return [];
 };
 
-export default function Reports() {
+function AdvancedReports() {
   // ---- Load real data ----
   const { data: animals = [], isLoading: animalsLoading } = useQuery<AnimalListItem[]>({
     queryKey: ["/api/animals"],
@@ -1042,9 +1043,7 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold" data-testid="text-page-title">
-          Reports
-        </h1>
+        <h2 className="text-xl font-semibold">Advanced Reports</h2>
         <p className="text-muted-foreground">
           Generate herd composition and historical reports
         </p>
@@ -1098,7 +1097,7 @@ export default function Reports() {
         <CardHeader className="space-y-4">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
-              <CardTitle>Grazing Days Per Head Report</CardTitle>
+              <CardTitle>Grazing Days Per Head Report · Non-billing analysis</CardTitle>
               <p className="text-sm text-muted-foreground max-w-3xl">
                 This section uses a rolling 12-month window ending on the As of date above. It includes only
                 the selected dairy and beef animals, treats each day assigned to a field as a grazing day, and
@@ -1399,4 +1398,18 @@ export default function Reports() {
       </Card>
     </div>
   );
+}
+
+export default function Reports() {
+  const [section, setSection] = useState<"memorized" | "advanced">("memorized");
+  return <div className="space-y-6">
+    <div><h1 className="text-2xl font-semibold" data-testid="text-page-title">Reports</h1></div>
+    <div className="flex flex-wrap gap-2" aria-label="Report sections">
+      <Button variant={section === "memorized" ? "default" : "outline"}
+        aria-pressed={section === "memorized"} onClick={() => setSection("memorized")}>Memorized Reports</Button>
+      <Button variant={section === "advanced" ? "default" : "outline"}
+        aria-pressed={section === "advanced"} onClick={() => setSection("advanced")}>Advanced Reports</Button>
+    </div>
+    {section === "memorized" ? <AnimalIssuesReport /> : <AdvancedReports />}
+  </div>;
 }

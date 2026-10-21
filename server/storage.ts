@@ -10,6 +10,8 @@ import { alias } from "drizzle-orm/mysql-core";
 import crypto from "crypto";
 import {
   animals,
+  animalOwnership,
+  owners,
   properties,
   fields,
   hayRecords,
@@ -403,10 +405,10 @@ const setAnimalRemovalStatus = async (
 
 export interface IStorage {
   // Animals
-  createAnimal(animal: InsertAnimal): Promise<Animal>;
+  createAnimal(animal: InsertAnimal, ownerId?: string): Promise<Animal>;
   getAllAnimals(): Promise<AnimalListItem[]>;
   getAnimalById(id: string): Promise<AnimalListItem | undefined>;
-  updateAnimal(id: string, animal: Partial<InsertAnimal>, locationChange?: LocationChange): Promise<Animal | undefined>;
+  updateAnimal(id: string, animal: Partial<InsertAnimal>, locationChange?: LocationChange, ownerChange?: { ownerId: string; effectiveDate: string }): Promise<Animal | undefined>;
   deleteAnimal(id: string): Promise<void>;
   getAnimalsReadyToBreed(): Promise<Animal[]>;
   getOffspringByParentId(parentId: string): Promise<Animal[]>;
@@ -550,13 +552,19 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // ---------- Animals ----------
 
-  async createAnimal(animal: InsertAnimal): Promise<Animal> {
+  async createAnimal(animal: InsertAnimal, selectedOwnerId?: string): Promise<Animal> {
     const id = crypto.randomUUID();
     const polledValue = normalizePolledStatus((animal as any).polled);
+    const ownerId = selectedOwnerId || (animal.type.trim().toLowerCase() === "dairy" ? "creamy-cow-llc" : "deck-family-farm");
 
     await db.transaction(async (tx) => {
       await requireAnimalLocation(tx, animal.status, animal.currentFieldId);
-      await tx.insert(animals).values({ ...(animal as any), polled: polledValue, id });
+      if (!(await tx.select({ id: owners.id }).from(owners).where(eq(owners.id, ownerId))).length)
+        throw locationProblem(400, "Choose a valid owner.");
+      await tx.insert(animals).values({ ...(animal as any), ownerId, polled: polledValue, id });
+      if (animal.dateOfBirth) await tx.insert(animalOwnership).values({
+        id: crypto.randomUUID(), animalId: id, ownerId, effectiveDate: animal.dateOfBirth as any,
+      });
       if (animal.currentFieldId) await recordLocationChange(tx, id, null, animal.currentFieldId,
         new Date(`${locationToday()}T00:00:00Z`), "Initial location recorded when animal was added");
     });
@@ -578,6 +586,7 @@ export class DatabaseStorage implements IStorage {
           sex: animals.sex,
           dateOfBirth: animals.dateOfBirth,
           status: animals.status,
+          ownerId: animals.ownerId,
           sireId: animals.sireId,
           damId: animals.damId,
           currentFieldId: animals.currentFieldId,
@@ -726,7 +735,7 @@ export class DatabaseStorage implements IStorage {
     return (await this.getAllAnimals()).find((animal) => animal.id === id);
   }
 
-  async updateAnimal(id: string, animal: Partial<InsertAnimal>, locationChange?: LocationChange): Promise<Animal | undefined> {
+  async updateAnimal(id: string, animal: Partial<InsertAnimal>, locationChange?: LocationChange, ownerChange?: { ownerId: string; effectiveDate: string }): Promise<Animal | undefined> {
     const updateData: Partial<InsertAnimal> = { ...(animal as any) };
     if (Object.prototype.hasOwnProperty.call(animal, "polled")) {
       updateData.polled = normalizePolledStatus((animal as any).polled);
@@ -746,6 +755,18 @@ export class DatabaseStorage implements IStorage {
           throw locationProblem(409, "The animal's location changed since you opened it. Refresh and review before saving.");
         await recordLocationChange(tx, id, previous.currentFieldId, fieldId,
           new Date(`${locationChange.date}T00:00:00Z`), "Location changed in animal editor");
+      }
+      if (ownerChange) {
+        if (!(await tx.select({ id: owners.id }).from(owners).where(eq(owners.id, ownerChange.ownerId))).length)
+          throw locationProblem(400, "Choose a valid owner.");
+        await tx.insert(animalOwnership).values({
+          id: crypto.randomUUID(), animalId: id, ownerId: ownerChange.ownerId,
+          effectiveDate: ownerChange.effectiveDate as any,
+        }).onDuplicateKeyUpdate({ set: { ownerId: ownerChange.ownerId } });
+        const [latest] = await tx.select({ ownerId: animalOwnership.ownerId }).from(animalOwnership)
+          .where(and(eq(animalOwnership.animalId, id), sql`${animalOwnership.effectiveDate} <= ${locationToday()}`))
+          .orderBy(desc(animalOwnership.effectiveDate)).limit(1);
+        (updateData as any).ownerId = latest?.ownerId ?? null;
       }
       await tx.update(animals).set(updateData).where(eq(animals.id, id));
     });
@@ -1683,7 +1704,7 @@ export class DatabaseStorage implements IStorage {
 
   async createEvent(event: InsertEvent): Promise<Event> {
     const id = crypto.randomUUID();
-    await db.insert(events).values({ ...(event as any), id });
+    await db.insert(events).values({ ...event, eventDate: new Date(`${event.eventDate}T12:00:00Z`), id });
     const [created] = await db.select().from(events).where(eq(events.id, id));
     return created as Event;
   }
@@ -1697,7 +1718,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEvent(id: string, event: Partial<InsertEvent>): Promise<Event | undefined> {
-    await db.update(events).set(event).where(eq(events.id, id));
+    const value = { ...event, ...(event.eventDate ? { eventDate: new Date(`${event.eventDate}T12:00:00Z`) } : {}) };
+    await db.update(events).set(value).where(eq(events.id, id));
     const [updated] = await db.select().from(events).where(eq(events.id, id));
     return updated;
   }
@@ -2081,6 +2103,7 @@ export class DatabaseStorage implements IStorage {
     if (animalList.length === 0) return [];
     const withIds = animalList.map((a) => ({
       ...(a as any),
+      ownerId: a.type.trim().toLowerCase() === "dairy" ? "creamy-cow-llc" : "deck-family-farm",
       polled: normalizePolledStatus((a as any).polled),
       id: crypto.randomUUID(),
     }));
@@ -2089,6 +2112,11 @@ export class DatabaseStorage implements IStorage {
       await db.transaction(async (tx) => {
         for (const animal of withIds) await requireAnimalLocation(tx, animal.status, animal.currentFieldId);
         await tx.insert(animals).values(withIds);
+        const bornAnimals = withIds.filter((animal) => animal.dateOfBirth);
+        if (bornAnimals.length) await tx.insert(animalOwnership).values(bornAnimals.map((animal) => ({
+          id: crypto.randomUUID(), animalId: animal.id, ownerId: animal.ownerId,
+          effectiveDate: animal.dateOfBirth as any,
+        })));
         for (const animal of withIds) if (animal.currentFieldId)
           await recordLocationChange(tx, animal.id, null, animal.currentFieldId, new Date(`${locationToday()}T00:00:00Z`), "Initial location recorded at import");
       });

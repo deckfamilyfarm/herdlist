@@ -8,6 +8,8 @@ import {
   date,
   json,
   index,
+  uniqueIndex,
+  primaryKey,
   boolean,
   mysqlEnum,
 } from "drizzle-orm/mysql-core";
@@ -203,8 +205,55 @@ export const animals = mysqlTable("animals", {
   betacasein: mysqlEnum("betacasein", ["A2/A2", "A1", "Not Tested"]),
   herdName: herdNameEnum,
   status: mysqlEnum("status", animalStatusEnum).notNull().default("active"),
+  ownerId: varchar("owner_id", { length: 36 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const owners = mysqlTable("owners", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
+});
+
+export const animalOwnership = mysqlTable("animal_ownership", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  animalId: varchar("animal_id", { length: 36 }).notNull(),
+  ownerId: varchar("owner_id", { length: 36 }).notNull(),
+  effectiveDate: date("effective_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({ animalDate: uniqueIndex("animal_ownership_animal_date_idx").on(table.animalId, table.effectiveDate) }));
+
+export const grazingContracts = mysqlTable("grazing_contracts", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  ownerId: varchar("owner_id", { length: 36 }).notNull(),
+  kind: mysqlEnum("kind", ["dairy", "general"]).notNull(),
+  activeFrom: date("active_from").notNull(),
+  activeTo: date("active_to"),
+  dairyBarnFieldId: varchar("dairy_barn_field_id", { length: 36 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const grazingAssignments = mysqlTable("grazing_assignments", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  contractId: varchar("contract_id", { length: 36 }).notNull(),
+  animalId: varchar("animal_id", { length: 36 }).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+}, (table) => ({ contractAnimal: index("grazing_assignments_contract_animal_idx").on(table.contractId, table.animalId) }));
+
+export const grazingRates = mysqlTable("grazing_rates", {
+  contractId: varchar("contract_id", { length: 36 }).notNull(),
+  effectiveDate: date("effective_date").notNull(),
+  rateCents: int("rate_cents").notNull(),
+  seasonStartMonth: int("season_start_month"),
+  seasonEndMonth: int("season_end_month"),
+  ageThresholdMonths: int("age_threshold_months"),
+  olderRateCents: int("older_rate_cents"),
+  youngerRateCents: int("younger_rate_cents"),
+  freeUnderMonths: int("free_under_months"),
+}, (table) => ({
+  primaryKey: primaryKey({ columns: [table.contractId, table.effectiveDate] }),
+}));
 
 export const livestockLots = mysqlTable("livestock_lots", {
   id: varchar("id", { length: 36 })
@@ -491,6 +540,7 @@ export const insertAnimalSchema = createInsertSchema(animals, {
 }).omit({
   id: true,
   createdAt: true,
+  ownerId: true,
 });
 
 export const insertPropertySchema = createInsertSchema(properties, {
@@ -1185,6 +1235,7 @@ export const resetPasswordSchema = z.object({
  * ========================= */
 
 export type Animal = typeof animals.$inferSelect;
+export type Owner = typeof owners.$inferSelect;
 export type AnimalDueDateStatus = "normal" | "overdue-struck";
 export type AnimalListItem = Animal & {
   currentFieldName?: string | null;

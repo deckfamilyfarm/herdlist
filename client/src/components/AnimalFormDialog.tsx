@@ -29,7 +29,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { animalStatusLabels } from "@/lib/animalStatus";
 import { useToast } from "@/hooks/use-toast";
-import type { InsertAnimal, Animal, Field, AnimalStatus, PolledStatus } from "@shared/schema";
+import type { InsertAnimal, Animal, Field, Owner, AnimalStatus, PolledStatus } from "@shared/schema";
 import { animalStatusEnum, polledStatusEnum, animalTagOptions } from "@shared/schema";
 import type { LocationChange } from "@shared/animalLocations";
 import { locationToday } from "@shared/animalLocations";
@@ -77,7 +77,8 @@ const isAllowedAnimalDobYear = (value: string) => {
 export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: AnimalFormDialogProps) {
   const { toast } = useToast();
   const [locationDate, setLocationDate] = useState(locationToday);
-  useEffect(() => { if (open) setLocationDate(locationToday()); }, [open]);
+  const [ownerEffectiveDate, setOwnerEffectiveDate] = useState(locationToday);
+  useEffect(() => { if (open) { setLocationDate(locationToday()); setOwnerEffectiveDate(locationToday()); } }, [open]);
   const [formData, setFormData] = useState<{
     tagNumber: string;
     type: string;
@@ -92,6 +93,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     polled: PolledStatus;
     tags: string[];
     status: AnimalStatus;
+    ownerId: string;
   }>({
     tagNumber: "",
     type: "",
@@ -106,6 +108,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     polled: "not tested",
     tags: [],
     status: "active",
+    ownerId: "",
   });
   const [sireOpen, setSireOpen] = useState(false);
   const [damOpen, setDamOpen] = useState(false);
@@ -118,6 +121,10 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
   // Fetch fields for location selection
   const { data: fields = [] } = useQuery<Field[]>({
     queryKey: ['/api/fields'],
+  });
+  const { data: owners = [] } = useQuery<Owner[]>({ queryKey: ['/api/grazing-services/owners'] });
+  const { data: ownershipHistory = [] } = useQuery<{ id: string; ownerName: string; effectiveDate: string }[]>({
+    queryKey: [`/api/grazing-services/ownership/${animal?.id || ""}`], enabled: !!animal,
   });
 
   useEffect(() => {
@@ -142,6 +149,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         polled: normalizePolledStatus((animal as any).polled),
         tags: Array.isArray((animal as any).tags) ? (animal as any).tags : [],
         status: (animal.status as AnimalStatus) ?? "active",
+        ownerId: animal.ownerId || "",
       });
     } else {
       setFormData({
@@ -158,12 +166,13 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         polled: "not tested",
         tags: [],
         status: "active",
+        ownerId: "",
       });
     }
   }, [animal, open]);
 
   const createAnimalMutation = useMutation({
-    mutationFn: async (data: InsertAnimal) => {
+    mutationFn: async (data: InsertAnimal & { ownerId?: string }) => {
       const res = await apiRequest("POST", "/api/animals", data);
       return res.json();
     },
@@ -190,6 +199,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         polled: "not tested",
         tags: [],
         status: "active",
+        ownerId: "",
       });
     },
     onError: (error: Error) => {
@@ -202,12 +212,13 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
   });
 
   const updateAnimalMutation = useMutation({
-    mutationFn: async (data: InsertAnimal) => {
+    mutationFn: async (data: InsertAnimal & { ownerChange?: { ownerId: string; effectiveDate: string } }) => {
       const res = await apiRequest("PUT", `/api/animals/${animal?.id}`, data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
+      if (animal) queryClient.invalidateQueries({ queryKey: [`/api/grazing-services/ownership/${animal.id}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/property-counts'] });
       toast({
@@ -240,7 +251,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       return;
     }
 
-    const submitData: InsertAnimal & { locationChange?: LocationChange } = {
+    const submitData: InsertAnimal & { locationChange?: LocationChange; ownerId?: string; ownerChange?: { ownerId: string; effectiveDate: string } } = {
       tagNumber: formData.tagNumber,
       type: formData.type,
       sex: formData.sex,
@@ -257,6 +268,15 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     };
     if (animal && formData.currentFieldId && formData.currentFieldId !== (animal.currentFieldId || "")) {
       submitData.locationChange = { date: locationDate, expectedFieldId: animal.currentFieldId || null };
+    }
+    if (animal && formData.ownerId !== (animal.ownerId || "")) {
+      if (!formData.ownerId || !ownerEffectiveDate) {
+        toast({ title: "Owner and date required", variant: "destructive" });
+        return;
+      }
+      submitData.ownerChange = { ownerId: formData.ownerId, effectiveDate: ownerEffectiveDate };
+    } else if (!animal && formData.ownerId) {
+      submitData.ownerId = formData.ownerId;
     }
     
     if (animal) {
@@ -296,6 +316,37 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                 <SelectItem value="ai">AI</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="owner">Owner</Label>
+            <Select value={formData.ownerId || "automatic"}
+              onValueChange={(value) => setFormData({ ...formData, ownerId: value === "automatic" ? "" : value })}>
+              <SelectTrigger id="owner"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="automatic">{animal ? "Unassigned — choose an owner" : "By type: dairy → Creamy Cow, other → Deck Family Farm"}</SelectItem>
+                {owners.map((owner) => <SelectItem key={owner.id} value={owner.id}>{owner.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {animal && <>
+              <Label htmlFor="owner-effective-date">Owner effective date for changes or history corrections</Label>
+              <Input id="owner-effective-date" type="date" max={locationToday()}
+                value={ownerEffectiveDate} onChange={(event) => setOwnerEffectiveDate(event.target.value)} />
+            </>}
+            {animal && ownershipHistory.length > 0 && <p className="text-xs text-muted-foreground">
+              History: {ownershipHistory.map((entry) => `${entry.effectiveDate} ${entry.ownerName}`).join(" · ")}
+            </p>}
+            {animal && formData.ownerId && <Button type="button" size="sm" variant="outline" onClick={async () => {
+              try {
+                await apiRequest("PUT", `/api/grazing-services/ownership/${animal.id}`, {
+                  ownerId: formData.ownerId, effectiveDate: ownerEffectiveDate,
+                });
+                queryClient.invalidateQueries({ queryKey: [`/api/grazing-services/ownership/${animal.id}`] });
+                queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
+                toast({ title: "Owner history saved" });
+              } catch (error) {
+                toast({ title: "Could not save owner history", description: String(error), variant: "destructive" });
+              }
+            }}>Record owner at date</Button>}
           </div>
           <div className="space-y-2">
             <Label htmlFor="sex">Sex *</Label>

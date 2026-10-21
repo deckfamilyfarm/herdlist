@@ -26,9 +26,10 @@ import {
 } from "@/components/ui/table";
 import { Calendar, Syringe, Baby, Activity, Edit } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { VaccinationFormDialog } from "./VaccinationFormDialog";
-import type { Vaccination, Event, CalvingRecord, Animal, AnimalStatus, Note, BreedingRecord } from "@shared/schema";
+import type { Vaccination, Event, CalvingRecord, Animal, AnimalStatus, Note, BreedingRecord, Owner, Movement, SlaughterRecord, Field } from "@shared/schema";
+import { buildAnimalHistory } from "@/lib/animalHistory";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -74,6 +75,10 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
     notes: "",
   }));
   const [editingBreedingId, setEditingBreedingId] = useState<string | null>(null);
+  const [eventFormOpen, setEventFormOpen] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    eventType: "", eventDate: new Date().toISOString().slice(0, 10), description: "",
+  });
   const enrichedAnimal = animal as Animal & { 
     currentFieldName?: string | null; 
     sireTagNumber?: string | null; 
@@ -127,34 +132,66 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
       : normalized.charAt(0).toUpperCase() + normalized.slice(1);
   };
 
-  const { data: vaccinations = [], isLoading: vaccinationsLoading } = useQuery<Vaccination[]>({
+  const { data: vaccinations = [], isLoading: vaccinationsLoading, error: vaccinationsError } = useQuery<Vaccination[]>({
     queryKey: ['/api/vaccinations/animal', animal.id],
     enabled: open,
+    staleTime: 0,
   });
 
-  const { data: events = [], isLoading: eventsLoading } = useQuery<Event[]>({
+  const { data: events = [], isLoading: eventsLoading, error: eventsError } = useQuery<Event[]>({
     queryKey: ['/api/events/animal', animal.id],
     enabled: open,
+    staleTime: 0,
   });
 
-  const { data: calvingRecords = [], isLoading: calvingLoading } = useQuery<CalvingRecord[]>({
+  const { data: movements = [], isLoading: movementsLoading, error: movementsError } = useQuery<Movement[]>({
+    queryKey: ['/api/movements/animal', animal.id], enabled: open, staleTime: 0,
+  });
+  const { data: fields = [], isLoading: fieldsLoading, error: fieldsError } = useQuery<Field[]>({ queryKey: ['/api/fields'], enabled: open, staleTime: 0 });
+  const { data: slaughterRecords = [], isLoading: slaughterLoading, error: slaughterError } = useQuery<SlaughterRecord[]>({
+    queryKey: ['/api/slaughter-records'], enabled: open, staleTime: 0,
+  });
+  const { data: ownershipHistory = [], isLoading: ownershipLoading, error: ownershipError } = useQuery<Array<{ id: string; ownerName: string; effectiveDate: string }>>({
+    queryKey: [`/api/grazing-services/ownership/${animal.id}`], enabled: open, staleTime: 0,
+  });
+
+  const { data: calvingRecords = [], isLoading: calvingLoading, error: calvingError } = useQuery<CalvingRecord[]>({
     queryKey: ['/api/calving-records/dam', animal.id],
-    enabled: open && animal.sex === 'female',
+    enabled: open,
+    staleTime: 0,
   });
 
-  const { data: notes = [], isLoading: notesLoading } = useQuery<Note[]>({
+  const { data: notes = [], isLoading: notesLoading, error: notesError } = useQuery<Note[]>({
     queryKey: ['/api/notes/animal', animal.id],
     enabled: open,
+    staleTime: 0,
   });
 
   // Pull all animals (for sire lookup in breeding list)
   const { data: allAnimals = [] } = useQuery<Animal[]>({
     queryKey: ['/api/animals'],
+    staleTime: 0,
   });
+  const { data: owners = [] } = useQuery<Owner[]>({ queryKey: ['/api/grazing-services/owners'], enabled: open });
 
-  const { data: breeding = [], isLoading: breedingLoading } = useQuery<BreedingRecord[]>({
+  const { data: breeding = [], isLoading: breedingLoading, error: breedingError } = useQuery<BreedingRecord[]>({
     queryKey: ['/api/breeding/animal', animal.id],
     enabled: open,
+    staleTime: 0,
+  });
+
+  const addEventMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/events", {
+        animalId: animal.id, eventType: eventForm.eventType.trim(), eventDate: eventForm.eventDate,
+        description: eventForm.description.trim() || null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/events/animal', animal.id] });
+      setEventFormOpen(false);
+      setEventForm({ eventType: "", eventDate: new Date().toISOString().slice(0, 10), description: "" });
+    },
   });
 
   const addNoteMutation = useMutation({
@@ -237,6 +274,14 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
       ? enrichedAnimal.dueDate.split("T")[0]
       : enrichedAnimal.dueDate
     : null;
+  const history = useMemo(() => buildAnimalHistory({ animalId: animal.id, animal, events, movements, notes,
+    breeding, vaccinations, calvingRecords, slaughterRecords, ownershipHistory, fields, allAnimals }),
+  [animal, events, movements, notes, breeding, vaccinations, calvingRecords,
+    slaughterRecords, ownershipHistory, fields, allAnimals]);
+  const historyLoading = eventsLoading || movementsLoading || notesLoading || breedingLoading ||
+    vaccinationsLoading || calvingLoading || fieldsLoading || slaughterLoading || ownershipLoading;
+  const historyError = [eventsError, movementsError, notesError, breedingError, vaccinationsError,
+    calvingError, fieldsError, slaughterError, ownershipError].find(Boolean);
   const formatTypeLabel = (type: string) => {
     const normalizedType = type.trim().toLowerCase();
     return normalizedType === "ai" ? "AI" : type;
@@ -341,6 +386,10 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Current Location</span>
                     <span className="font-medium">{enrichedAnimal.currentFieldName || 'Not assigned'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Owner</span>
+                    <span className="font-medium">{owners.find((owner) => owner.id === animal.ownerId)?.name || 'Not assigned'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Organic</span>
@@ -869,28 +918,51 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                   <Activity className="h-4 w-4" />
                   Event History
                 </CardTitle>
-                <Button size="sm" data-testid="button-add-event">
+                <Button size="sm" data-testid="button-add-event" onClick={() => setEventFormOpen((value) => !value)}>
                   Add Event
                 </Button>
               </CardHeader>
-              <CardContent>
-                {eventsLoading ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">Loading events...</p>
-                ) : events.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No events recorded</p>
+              <CardContent className="space-y-4">
+                {eventFormOpen && <div className="space-y-3 rounded-md border p-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1"><label className="text-sm font-medium" htmlFor="event-type">Event type</label>
+                      <Input id="event-type" maxLength={100} value={eventForm.eventType}
+                        onChange={(event) => setEventForm({ ...eventForm, eventType: event.target.value })}
+                        placeholder="Example: Health check" /></div>
+                    <div className="space-y-1"><label className="text-sm font-medium" htmlFor="event-date">Date</label>
+                      <Input id="event-date" type="date" value={eventForm.eventDate}
+                        onChange={(event) => setEventForm({ ...eventForm, eventDate: event.target.value })} /></div>
+                  </div>
+                  <div className="space-y-1"><label className="text-sm font-medium" htmlFor="event-description">Description</label>
+                    <Textarea id="event-description" maxLength={1000} value={eventForm.description}
+                      onChange={(event) => setEventForm({ ...eventForm, description: event.target.value })} /></div>
+                  {addEventMutation.error && <p role="alert" className="text-sm text-destructive">Could not save event: {String(addEventMutation.error)}</p>}
+                  <div className="flex gap-2"><Button size="sm" disabled={addEventMutation.isPending ||
+                    !eventForm.eventType.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(eventForm.eventDate)}
+                    onClick={() => addEventMutation.mutate()}>Save event</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEventFormOpen(false)}>Cancel</Button></div>
+                </div>}
+                <p className="text-xs text-muted-foreground">Movement, notes, breeding, ownership, health, and exit records appear here alongside manually added events.</p>
+                {historyError ? (
+                  <p role="alert" className="text-sm text-destructive">Some event history could not load: {String(historyError)}</p>
+                ) : null}
+                {historyLoading ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Loading event history...</p>
+                ) : history.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No history recorded for this animal</p>
                 ) : (
                   <div className="space-y-3">
-                    {events.map((event) => (
+                    {history.map((event) => (
                       <div
-                        key={event.id}
+                        key={event.key}
                         className="flex gap-4 border-l-2 border-chart-1 pl-4 py-2"
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline">{event.eventType}</Badge>
-                            <span className="text-xs text-muted-foreground">{event.eventDate}</span>
+                            <Badge variant="outline">{event.type}</Badge>
+                            <span className="text-xs text-muted-foreground">{event.date}</span>
                           </div>
-                          <p className="text-sm mt-1">{event.description || 'No description'}</p>
+                          <p className="text-sm mt-1 whitespace-pre-wrap">{event.description}</p>
                         </div>
                       </div>
                     ))}

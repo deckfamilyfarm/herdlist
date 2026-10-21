@@ -14,6 +14,7 @@ import Lots from "@/pages/Lots";
 import Locations from "@/pages/Locations";
 import Movements from "@/pages/Movements";
 import Reports from "@/pages/Reports";
+import GrazingServices from "@/pages/GrazingServices";
 import SlaughterReport from "@/pages/SlaughterReport";
 import Import from "@/pages/Import";
 import Admin from "@/pages/Admin";
@@ -36,6 +37,7 @@ function Router() {
           <Route path="/locations" component={Locations} />
           <Route path="/movements" component={Movements} />
           <Route path="/reports" component={Reports} />
+          <Route path="/grazing-services" component={GrazingServices} />
           <Route path="/slaughter" component={SlaughterReport} />
           <Route path="/import" component={Import} />
           <Route path="/admin" component={Admin} />

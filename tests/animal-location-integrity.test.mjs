@@ -23,7 +23,13 @@ test("animal locations and their movement records are saved together", { skip: !
       date_of_birth DATE, sire_id VARCHAR(36), dam_id VARCHAR(36), current_field_id VARCHAR(36),
       organic BOOLEAN DEFAULT FALSE, phenotype VARCHAR(1000), polled VARCHAR(32), tags JSON,
       betacasein VARCHAR(32), herd_name VARCHAR(32), status VARCHAR(32) DEFAULT 'active',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`);
+      owner_id VARCHAR(36), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`);
+    await connection.query("CREATE TEMPORARY TABLE owners (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255)) ENGINE=InnoDB");
+    await connection.query("INSERT INTO owners VALUES ('creamy-cow-llc','Creamy Cow, LLC'),('deck-family-farm','Deck Family Farm')");
+    await connection.query(`CREATE TEMPORARY TABLE animal_ownership (
+      id VARCHAR(36) PRIMARY KEY, animal_id VARCHAR(36), owner_id VARCHAR(36),
+      effective_date DATE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY animal_ownership_animal_date_idx (animal_id, effective_date)) ENGINE=InnoDB`);
     await connection.query("CREATE TEMPORARY TABLE fields (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255), property_id VARCHAR(36)) ENGINE=InnoDB");
     await connection.query("CREATE TEMPORARY TABLE movements (id VARCHAR(36) PRIMARY KEY, animal_id VARCHAR(36), from_field_id VARCHAR(36), to_field_id VARCHAR(36), movement_date TIMESTAMP, notes VARCHAR(1000), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
     await connection.query("INSERT INTO fields VALUES ('pasture','Pond Field','property-p'),('barn','Dairy Barn','property-b'),('river','River Field','property-r')");
@@ -44,6 +50,29 @@ test("animal locations and their movement records are saved together", { skip: !
     assert.equal(await count(), 0);
     const animal = await storage.createAnimal(animalData("2445-test"));
     assert.equal(await count(), 1, "Creating a located animal establishes its initial movement");
+    const [[ownership]] = await connection.query("SELECT owner_id, effective_date FROM animal_ownership WHERE animal_id=?", [animal.id]);
+    assert.equal(ownership.owner_id, "creamy-cow-llc");
+    const unknownBirth = await storage.createAnimal({ ...animalData("unknown-birth"), dateOfBirth: null });
+    const ownershipRows = async (animalId) => (await connection.query(
+      "SELECT owner_id, DATE_FORMAT(effective_date, '%Y-%m-%d') AS effectiveDate FROM animal_ownership WHERE animal_id=?",
+      [animalId]))[0];
+    assert.deepEqual(await ownershipRows(unknownBirth.id), [], "Unknown birth date must not invent an ownership start date");
+    await storage.updateAnimal(unknownBirth.id, { dateOfBirth: "2020-03-04" });
+    assert.deepEqual(await ownershipRows(unknownBirth.id), [], "Recording a birth date still requires an ownership decision");
+    await storage.updateAnimal(unknownBirth.id, {}, undefined,
+      { ownerId: "creamy-cow-llc", effectiveDate: "2020-03-04" });
+    assert.deepEqual((await ownershipRows(unknownBirth.id)).map(row => [row.owner_id, row.effectiveDate]),
+      [["creamy-cow-llc", "2020-03-04"]]);
+    await storage.updateAnimal(unknownBirth.id, { phenotype: "Updated description" });
+    assert.equal((await ownershipRows(unknownBirth.id)).length, 1, "Later edits must not duplicate ownership history");
+    const [orphan] = await connection.query("SELECT UUID() AS id");
+    await connection.query("INSERT INTO animals (id, tag_number, type, sex, date_of_birth, current_field_id, owner_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [orphan[0].id, "orphan-owner-test", "beef", "cow", "2021-02-03", "pasture", "deck-family-farm"]);
+    const backfillSql = await fs.readFile(path.join(root, "migrations-mysql/20261021_backfill_ownership_from_birth.sql"), "utf8");
+    await connection.query(backfillSql);
+    await connection.query(backfillSql);
+    assert.deepEqual((await ownershipRows(orphan[0].id)).map(row => [row.owner_id, row.effectiveDate]),
+      [["deck-family-farm", "2021-02-03"]], "The ownership repair is safe to rerun");
     await assert.rejects(storage.updateAnimal(animal.id, { currentFieldId: "barn" }), { statusCode: 400 });
     await assert.rejects(storage.updateAnimal(animal.id, { currentFieldId: null }), { statusCode: 400 });
     assert.equal(await count(), 1);
