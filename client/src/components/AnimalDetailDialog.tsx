@@ -47,6 +47,7 @@ const statusVariant: Partial<
   Record<AnimalStatus, "default" | "secondary" | "destructive" | "outline">
 > = {
   active: "default",
+  inactive: "secondary",
   slaughtered: "secondary",
   sold: "secondary",
   expired: "secondary",
@@ -384,7 +385,7 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                     </div>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Current Location</span>
+                    <span className="text-muted-foreground">{animal.status === "inactive" ? "Last recorded location" : "Current Location"}</span>
                     <span className="font-medium">{enrichedAnimal.currentFieldName || 'Not assigned'}</span>
                   </div>
                   <div className="flex justify-between">
@@ -424,6 +425,12 @@ export function AnimalDetailDialog({ open, onOpenChange, animal, onEdit }: Anima
                       {animalStatusLabels[animal.status as AnimalStatus] ?? "Active"}
                     </span>
                   </div>
+                  {animal.status === "inactive" && animal.inactiveSince && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Inactive since</span>
+                      <span className="font-medium">{String(animal.inactiveSince).slice(0, 10)}</span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

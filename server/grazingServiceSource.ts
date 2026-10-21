@@ -11,6 +11,7 @@ export async function readGrazingServiceSource(db: Pool | PoolConnection): Promi
     deathResult, contractResult, assignmentResult, rateResult] = await Promise.all([
     db.query<DbRow[]>(`SELECT id, tag_number AS tagNumber, phenotype, type, sex, status,
       DATE_FORMAT(date_of_birth, '%Y-%m-%d') AS dateOfBirth,
+      DATE_FORMAT(inactive_since, '%Y-%m-%d') AS inactiveSince,
       current_field_id AS currentFieldId FROM animals`),
     db.query<DbRow[]>("SELECT id, name FROM fields"),
     db.query<DbRow[]>(`SELECT id, animal_id AS animalId,

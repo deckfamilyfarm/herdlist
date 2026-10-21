@@ -3,6 +3,7 @@ import { saveMovementHistory } from "./movementHistory";
 import type { HistoryEntry, HistoryCorrection } from "../shared/movementHistory";
 import type { LocationChange } from "../shared/animalLocations";
 import { locationToday } from "../shared/animalLocations";
+import { isServiceDate } from "../shared/grazingServices";
 import { locationProblem, recordLocationChange, requireAnimalLocation } from "./animalLocations";
 import { eq, sql, and, or, gte, desc, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -73,6 +74,19 @@ import {
 } from "@shared/schema";
 
 console.log("DB check:", typeof (db as any).insert, typeof (db as any).select);
+
+function validateInactiveDate(status: string, inactiveSince: string | null | undefined,
+  birthDate: string | Date | null | undefined): void {
+  if (status !== "inactive") {
+    if (inactiveSince) throw locationProblem(400, "Only inactive animals can have an inactive starting date.");
+    return;
+  }
+  if (!inactiveSince || !isServiceDate(inactiveSince) || inactiveSince > locationToday())
+    throw locationProblem(400, "Choose a valid inactive starting date through today.");
+  const birthDay = birthDate instanceof Date ? birthDate.toISOString().slice(0, 10) : birthDate;
+  if (birthDay && inactiveSince < birthDay)
+    throw locationProblem(400, "Inactive starting date cannot be before the animal's birth date.");
+}
 
 const normalizePolledStatus = (value: any): PolledStatus => {
   if (value === "polled" || value === "horned" || value === "not tested") {
@@ -556,6 +570,7 @@ export class DatabaseStorage implements IStorage {
     const id = crypto.randomUUID();
     const polledValue = normalizePolledStatus((animal as any).polled);
     const ownerId = selectedOwnerId || (animal.type.trim().toLowerCase() === "dairy" ? "creamy-cow-llc" : "deck-family-farm");
+    validateInactiveDate(animal.status ?? "active", animal.inactiveSince, animal.dateOfBirth);
 
     await db.transaction(async (tx) => {
       await requireAnimalLocation(tx, animal.status, animal.currentFieldId);
@@ -565,7 +580,7 @@ export class DatabaseStorage implements IStorage {
       if (animal.dateOfBirth) await tx.insert(animalOwnership).values({
         id: crypto.randomUUID(), animalId: id, ownerId, effectiveDate: animal.dateOfBirth as any,
       });
-      if (animal.currentFieldId) await recordLocationChange(tx, id, null, animal.currentFieldId,
+      if (animal.currentFieldId && animal.status !== "inactive") await recordLocationChange(tx, id, null, animal.currentFieldId,
         new Date(`${locationToday()}T00:00:00Z`), "Initial location recorded when animal was added");
     });
 
@@ -586,6 +601,7 @@ export class DatabaseStorage implements IStorage {
           sex: animals.sex,
           dateOfBirth: animals.dateOfBirth,
           status: animals.status,
+          inactiveSince: animals.inactiveSince,
           ownerId: animals.ownerId,
           sireId: animals.sireId,
           damId: animals.damId,
@@ -747,6 +763,15 @@ export class DatabaseStorage implements IStorage {
     await db.transaction(async (tx) => {
       const [previous] = await tx.select().from(animals).where(eq(animals.id, id)).for("update");
       if (!previous) return;
+      const nextStatus = updateData.status ?? previous.status;
+      const nextInactiveSince = updateData.inactiveSince === undefined ? previous.inactiveSince : updateData.inactiveSince;
+      const nextBirthDate = updateData.dateOfBirth === undefined ? previous.dateOfBirth : updateData.dateOfBirth;
+      if (nextStatus === "inactive") {
+        validateInactiveDate(nextStatus, nextInactiveSince, nextBirthDate);
+      } else {
+        if (updateData.inactiveSince) throw locationProblem(400, "Only inactive animals can have an inactive starting date.");
+        if (previous.status === "inactive" || updateData.status) updateData.inactiveSince = null;
+      }
       const fieldId = updateData.currentFieldId === undefined ? previous.currentFieldId : updateData.currentFieldId;
       await requireAnimalLocation(tx, updateData.status || previous.status, fieldId);
       if (fieldId !== previous.currentFieldId && fieldId) {
@@ -2107,6 +2132,8 @@ export class DatabaseStorage implements IStorage {
       polled: normalizePolledStatus((a as any).polled),
       id: crypto.randomUUID(),
     }));
+    for (const animal of withIds)
+      validateInactiveDate(animal.status ?? "active", animal.inactiveSince, animal.dateOfBirth);
 
     try {
       await db.transaction(async (tx) => {
@@ -2117,7 +2144,7 @@ export class DatabaseStorage implements IStorage {
           id: crypto.randomUUID(), animalId: animal.id, ownerId: animal.ownerId,
           effectiveDate: animal.dateOfBirth as any,
         })));
-        for (const animal of withIds) if (animal.currentFieldId)
+        for (const animal of withIds) if (animal.currentFieldId && animal.status !== "inactive")
           await recordLocationChange(tx, animal.id, null, animal.currentFieldId, new Date(`${locationToday()}T00:00:00Z`), "Initial location recorded at import");
       });
       return [];

@@ -201,6 +201,19 @@ test("a dated slaughter, expiration, or sale counts through its exit day", () =>
   }
 });
 
+test("unknown-disposition inactivity starts on its date and excludes all of 2026 when set to January 1", () => {
+  const input = source();
+  input.animals[0].dateOfBirth = "2020-01-01";
+  input.animals[0].status = "inactive";
+  input.animals[0].inactiveSince = "2026-09-16";
+  assert.equal(report(input).contracts[0].headDays, 15);
+  input.animals[0].inactiveSince = "2026-01-01";
+  assert.equal(calculateGrazingServices(input, "2026-01", "2026-10-19").contracts[0].headDays, 0);
+  assert.equal(report(input).contracts[0].headDays, 0);
+  input.animals[0].inactiveSince = null;
+  assert.equal(report(input).contracts[0].headDays, 0, "Undated inactivity remains excluded");
+});
+
 test("same-day contradictory movements are not billed; known outside-barn location mismatches are warnings", () => {
   const input = source();
   input.movements.push({ id: "tie", animalId: "cow", fromFieldId: "pasture", toFieldId: "barn",

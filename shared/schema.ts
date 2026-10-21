@@ -107,6 +107,7 @@ const animalDateOfBirth = dateOnlyOptional.superRefine(
 // Status enum for animals (frontend + backend)
 export const animalStatusEnum = [
   "active",
+  "inactive",
   "slaughtered",
   "sold",
   "expired",
@@ -205,6 +206,7 @@ export const animals = mysqlTable("animals", {
   betacasein: mysqlEnum("betacasein", ["A2/A2", "A1", "Not Tested"]),
   herdName: herdNameEnum,
   status: mysqlEnum("status", animalStatusEnum).notNull().default("active"),
+  inactiveSince: date("inactive_since", { mode: "string" }),
   ownerId: varchar("owner_id", { length: 36 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -518,6 +520,7 @@ export const users = mysqlTable("users", {
 export const insertAnimalSchema = createInsertSchema(animals, {
   // DATE column -> normalized YYYY-MM-DD string
   dateOfBirth: animalDateOfBirth,
+  inactiveSince: dateOnlyOptional.optional(),
   polled: z
     .any()
     .optional()

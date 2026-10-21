@@ -23,6 +23,7 @@ test("animal locations and their movement records are saved together", { skip: !
       date_of_birth DATE, sire_id VARCHAR(36), dam_id VARCHAR(36), current_field_id VARCHAR(36),
       organic BOOLEAN DEFAULT FALSE, phenotype VARCHAR(1000), polled VARCHAR(32), tags JSON,
       betacasein VARCHAR(32), herd_name VARCHAR(32), status VARCHAR(32) DEFAULT 'active',
+      inactive_since DATE,
       owner_id VARCHAR(36), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB`);
     await connection.query("CREATE TEMPORARY TABLE owners (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255)) ENGINE=InnoDB");
     await connection.query("INSERT INTO owners VALUES ('creamy-cow-llc','Creamy Cow, LLC'),('deck-family-farm','Deck Family Farm')");
@@ -50,6 +51,14 @@ test("animal locations and their movement records are saved together", { skip: !
     assert.equal(await count(), 0);
     const animal = await storage.createAnimal(animalData("2445-test"));
     assert.equal(await count(), 1, "Creating a located animal establishes its initial movement");
+    await assert.rejects(storage.updateAnimal(animal.id, { status: "inactive" }), { statusCode: 400 });
+    await assert.rejects(storage.updateAnimal(animal.id, { status: "inactive", inactiveSince: "2023-01-01" }), { statusCode: 400 });
+    await storage.updateAnimal(animal.id, { status: "inactive", inactiveSince: "2026-01-01" });
+    let [[inactiveState]] = await connection.query("SELECT status, DATE_FORMAT(inactive_since, '%Y-%m-%d') AS inactiveSince FROM animals WHERE id=?", [animal.id]);
+    assert.deepEqual([inactiveState.status, inactiveState.inactiveSince], ["inactive", "2026-01-01"]);
+    await storage.updateAnimal(animal.id, { status: "active" });
+    [[inactiveState]] = await connection.query("SELECT status, inactive_since AS inactiveSince FROM animals WHERE id=?", [animal.id]);
+    assert.deepEqual([inactiveState.status, inactiveState.inactiveSince], ["active", null]);
     const [[ownership]] = await connection.query("SELECT owner_id, effective_date FROM animal_ownership WHERE animal_id=?", [animal.id]);
     assert.equal(ownership.owner_id, "creamy-cow-llc");
     const unknownBirth = await storage.createAnimal({ ...animalData("unknown-birth"), dateOfBirth: null });

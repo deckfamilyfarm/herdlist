@@ -7,7 +7,7 @@ export type AnimalHistoryItem = { key: string; date: string; type: string; descr
 type OwnershipEntry = { id: string; ownerName: string; effectiveDate: string };
 type HistorySources = {
   animalId: string;
-  animal: Pick<Animal, "id" | "dateOfBirth" | "createdAt">;
+  animal: Pick<Animal, "id" | "dateOfBirth" | "inactiveSince" | "createdAt">;
   events: Event[];
   movements: Movement[];
   notes: Note[];
@@ -34,6 +34,9 @@ export function buildAnimalHistory(source: HistorySources): AnimalHistoryItem[] 
   add(`animal-added-${source.animal.id}`, source.animal.createdAt, "Animal added", "Animal record created");
   if (source.animal.dateOfBirth)
     add(`birth-${source.animal.id}`, source.animal.dateOfBirth, "Birth", "Date of birth recorded");
+  if (source.animal.inactiveSince)
+    add(`inactive-${source.animal.id}`, source.animal.inactiveSince, "Inactive",
+      "First inactive day; disposition unknown");
   for (const event of source.events)
     add(`event-${event.id}`, event.eventDate, event.eventType, event.description || "Recorded event");
   for (const move of source.movements) {

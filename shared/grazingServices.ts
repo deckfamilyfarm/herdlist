@@ -2,6 +2,7 @@ export type ServiceAnimal = {
   id: string; tagNumber: string; type: string; sex: string;
   phenotype: string | null; status: string;
   dateOfBirth: string | null; currentFieldId: string | null;
+  inactiveSince?: string | null;
 };
 export type ServiceField = { id: string; name: string };
 export type ServiceMovement = {
@@ -175,18 +176,22 @@ export function calculateGrazingServices(source: ServiceSource, month: string, t
   }
   for (const animal of source.animals) {
     const exit = exits.get(animal.id);
+    // "Inactive since" is the first excluded day; known exits are last included days.
+    const inactiveSince = animal.status === "inactive" && animal.inactiveSince && isServiceDate(animal.inactiveSince)
+      ? animal.inactiveSince : null;
     const birthDate = animal.dateOfBirth && isServiceDate(animal.dateOfBirth)
       ? animal.dateOfBirth : null;
     const relevant = contractReports.filter((contract) =>
       contract.kind === "dairy" ? animal.type.trim().toLowerCase() === "dairy" :
         (assignments.get(animal.id) || []).some((assignment) => assignment.contractId === contract.id));
     if (!relevant.length) continue;
-    if (animal.status !== "active" && !exit) continue;
+    if (animal.status !== "active" && !exit && !inactiveSince) continue;
     const history = transitionsFor(moves.get(animal.id) || []);
     let locationIndex = -1;
     const ownerHistory = owners.get(animal.id) || [];
     let ownerIndex = -1;
-    for (let day = start; day <= throughDate && (!exit || day <= exit); day = addServiceDays(day, 1)) {
+    for (let day = start; day <= throughDate && (!exit || day <= exit) &&
+      (!inactiveSince || day < inactiveSince); day = addServiceDays(day, 1)) {
       if (birthDate && day < birthDate) continue;
       while (locationIndex + 1 < history.length && history[locationIndex + 1].day <= day) locationIndex++;
       while (ownerIndex + 1 < ownerHistory.length && ownerHistory[ownerIndex + 1].effectiveDate <= day) ownerIndex++;

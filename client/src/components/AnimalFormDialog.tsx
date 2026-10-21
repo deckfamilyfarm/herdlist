@@ -93,6 +93,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     polled: PolledStatus;
     tags: string[];
     status: AnimalStatus;
+    inactiveSince: string;
     ownerId: string;
   }>({
     tagNumber: "",
@@ -108,6 +109,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     polled: "not tested",
     tags: [],
     status: "active",
+    inactiveSince: "",
     ownerId: "",
   });
   const [sireOpen, setSireOpen] = useState(false);
@@ -149,6 +151,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         polled: normalizePolledStatus((animal as any).polled),
         tags: Array.isArray((animal as any).tags) ? (animal as any).tags : [],
         status: (animal.status as AnimalStatus) ?? "active",
+        inactiveSince: animal.inactiveSince ? String(animal.inactiveSince).slice(0, 10) : "",
         ownerId: animal.ownerId || "",
       });
     } else {
@@ -166,6 +169,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         polled: "not tested",
         tags: [],
         status: "active",
+        inactiveSince: "",
         ownerId: "",
       });
     }
@@ -178,6 +182,8 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
+      queryClient.invalidateQueries({ predicate: (query) =>
+        String(query.queryKey[0]).startsWith('/api/grazing-services/report?') });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/property-counts'] });
       toast({
@@ -199,6 +205,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
         polled: "not tested",
         tags: [],
         status: "active",
+        inactiveSince: "",
         ownerId: "",
       });
     },
@@ -218,6 +225,8 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/animals'] });
+      queryClient.invalidateQueries({ predicate: (query) =>
+        String(query.queryKey[0]).startsWith('/api/grazing-services/report?') });
       if (animal) queryClient.invalidateQueries({ queryKey: [`/api/grazing-services/ownership/${animal.id}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/property-counts'] });
@@ -242,6 +251,11 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       toast({ title: "Location required", description: "Choose a current location for this Active animal.", variant: "destructive" });
       return;
     }
+    if (formData.status === "inactive" && (!formData.inactiveSince || formData.inactiveSince > locationToday() ||
+      (formData.dateOfBirth && formData.inactiveSince < formData.dateOfBirth))) {
+      toast({ title: "Valid inactive date required", description: "Choose the first day this animal was no longer active, on or after its birth date and no later than today.", variant: "destructive" });
+      return;
+    }
     if (!isAllowedAnimalDobYear(formData.dateOfBirth)) {
       toast({
         title: "Invalid date of birth",
@@ -261,6 +275,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       currentFieldId: formData.currentFieldId || null,
       organic: Boolean(formData.organic),
       status: formData.status,
+      inactiveSince: formData.status === "inactive" ? formData.inactiveSince : null,
       phenotype: formData.phenotype.trim() || null,
       betacasein: formData.betacasein || null,
       polled: formData.polled || "not tested",
@@ -490,7 +505,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
             </Popover>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="currentFieldId">Current Location{formData.status === "active" ? " *" : ""}</Label>
+            <Label htmlFor="currentFieldId">{formData.status === "inactive" ? "Last recorded location" : "Current Location"}{formData.status === "active" ? " *" : ""}</Label>
             <Select
               value={formData.currentFieldId || "none"}
               onValueChange={(value) =>
@@ -552,6 +567,19 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               To mark an animal as slaughtered or sold, use the Slaughter/Sold screen.
             </p>
           </div>
+
+          {formData.status === "inactive" && (
+            <div className="space-y-2">
+              <Label htmlFor="inactive-since">Inactive starting *</Label>
+              <Input id="inactive-since" type="date" required max={locationToday()}
+                min={formData.dateOfBirth || undefined} value={formData.inactiveSince}
+                onChange={(event) => setFormData({ ...formData, inactiveSince: event.target.value })} />
+              <p className="text-sm text-muted-foreground">
+                First day to exclude from grazing charges. For no 2026 charges, enter 2026-01-01.
+                Earlier eligible days may still be charged. This does not say whether the animal was sold, slaughtered, or died.
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center space-x-2">
             <Checkbox 

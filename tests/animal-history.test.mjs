@@ -32,3 +32,13 @@ test("Event History has an animal-added milestone even without other records or 
   });
   assert.deepEqual(items.map(({ date, type }) => [date, type]), [["2025-12-14", "Animal added"]]);
 });
+
+test("Event History shows when an animal became inactive without assigning a cause", () => {
+  const items = buildAnimalHistory({
+    animalId: "cow", animal: { id: "cow", dateOfBirth: null, inactiveSince: "2026-01-01", createdAt: "2025-12-14T07:05:58.000Z" },
+    events: [], movements: [], notes: [], breeding: [], vaccinations: [],
+    calvingRecords: [], slaughterRecords: [], ownershipHistory: [], fields: [], allAnimals: [],
+  });
+  assert.deepEqual(items.map(({ date, type }) => [date, type]),
+    [["2026-01-01", "Inactive"], ["2025-12-14", "Animal added"]]);
+});
