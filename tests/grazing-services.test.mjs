@@ -93,6 +93,24 @@ test("general contracts count assigned days including barn days; overlaps charge
   assert.equal(result.contracts.reduce((sum, contract) => sum + contract.headDays, 0), 30);
 });
 
+test("current Missing field excludes an animal from dairy and general charges despite pasture history", () => {
+  const input = source();
+  input.animals[0].dateOfBirth = "2020-01-01";
+  input.animals[0].currentFieldId = "missing";
+  input.contracts.push({ id: "general", name: "Other", ownerId: "creamy", ownerName: "Creamy Cow, LLC",
+    kind: "general", activeFrom: "2026-09-01", activeTo: null, dairyBarnFieldId: null });
+  input.rates.push({ contractId: "general", effectiveDate: "2015-01-01", rateCents: 100 });
+  input.assignments.push({ id: "assignment", contractId: "general", animalId: "cow",
+    startDate: "2026-09-01", endDate: null });
+  const result = report(input);
+  assert.equal(result.totalAmountCents, 0);
+  assert.equal(result.issues.length, 0);
+  for (const contract of result.contracts) {
+    assert.equal(contract.headDays, 0);
+    assert.deepEqual(contract.rows, []);
+  }
+});
+
 test("owner mismatches warn but count through a dated exit; missing rates remain visible", () => {
   const input = source();
   input.ownership.push({ animalId: "cow", ownerId: "other", effectiveDate: "2026-09-21" });
@@ -117,6 +135,29 @@ test("missing movement history warns and uses a known current pasture; unknown l
   assert.equal(report(input).contracts[0].headDays, 0);
   input.animals[0].currentFieldId = "barn";
   assert.equal(report(input).contracts[0].headDays, 0);
+});
+
+test("a calf's dated birth and same-day barn move close its April location gap", () => {
+  const input = source();
+  input.fields.push({ id: "birth-field", name: "Back Hillside" });
+  input.animals[0].dateOfBirth = "2026-04-16";
+  input.ownership[0].effectiveDate = "2026-04-16";
+  input.rates[0].freeUnderMonths = 6;
+  input.movements = [{ id: "may-out", animalId: "cow", fromFieldId: "barn", toFieldId: "pasture",
+    movementDate: "2026-05-23T00:00:00Z", createdAt: "2026-05-23T12:00:00Z" }];
+  const before = calculateGrazingServices(input, "2026-04", "2026-10-21");
+  assert.equal(before.issues.find((issue) => issue.code === "unknownLocation")?.days, 15);
+  input.movements.push(
+    { id: "birth", animalId: "cow", fromFieldId: null, toFieldId: "birth-field",
+      movementDate: "2026-04-16T12:00:00Z", createdAt: "2026-10-21T12:00:00Z" },
+    { id: "barn-arrival", animalId: "cow", fromFieldId: "birth-field", toFieldId: "barn",
+      movementDate: "2026-04-16T12:00:01Z", createdAt: "2026-10-21T12:00:01Z" },
+  );
+  const april = calculateGrazingServices(input, "2026-04", "2026-10-21");
+  assert.equal(april.issues.find((issue) => issue.code === "unknownLocation"), undefined);
+  assert.equal(april.contracts[0].headDays, 0);
+  const may = calculateGrazingServices(input, "2026-05", "2026-10-21");
+  assert.equal(may.contracts[0].headDays, 9);
 });
 
 test("non-barn warning days still count with missing ownership, barn setup, and conflicting pasture moves", () => {

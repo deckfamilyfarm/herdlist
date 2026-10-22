@@ -45,6 +45,10 @@ const money = (cents: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 const priorMonth = () => addServiceMonths(`${serviceToday().slice(0, 7)}-01`, -1).slice(0, 7);
 const issueDetails: Partial<Record<ServiceReport["issues"][number]["code"], { label: string; description: string }>> = {
+  unknownLocation: {
+    label: "No dated location",
+    description: "No movement establishes a field for these report dates. The current field may still be known and is used for eligible charges.",
+  },
   currentLocationMismatch: {
     label: "Current location mismatch",
     description: "The animal’s current field differs from its latest movement destination. Please review the records; a known outside-Dairy-Barn location can still count.",
@@ -198,6 +202,7 @@ export default function GrazingServices() {
             </p></div>
             <p><strong>{contract.headDays}</strong> head-days · <strong>{money(contract.amountCents)}</strong>
               {contract.unpricedHeadDays > 0 && ` · ${contract.unpricedHeadDays} unpriced head-days`}</p>
+            <p className="text-sm text-muted-foreground">Note: Animals currently assigned to “Missing” are excluded from animal detail, head-days, and charges.</p>
             {contract.kind === "dairy" && !contract.dairyBarnFieldId && <p role="alert" className="text-amber-700">Select the Dairy Barn field in this contract to clear the setup warning.</p>}
             {contract.rows.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead><tr className="border-b text-left"><th className="p-2">Animal</th><th className="p-2">Phenotype</th><th className="p-2">Type</th><th className="p-2">Sex</th><th className="p-2">Date of birth</th><th className="p-2 text-right">Head-days</th><th className="p-2 text-right">Charge</th></tr></thead>

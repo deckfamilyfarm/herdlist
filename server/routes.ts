@@ -71,7 +71,8 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { historyEntrySchema, historyCorrectionSchema } from "../shared/movementHistory";
-import { locationChangeSchema } from "../shared/animalLocations";
+import { locationChangeSchema, locationDateSchema, locationToday } from "../shared/animalLocations";
+import { requireInitialLocationDate } from "./animalLocations";
 import { grazingServiceRoutes } from "./grazingServiceRoutes";
 import { readAnimalIssues } from "./animalIssueSource";
 import { pool } from "./db";
@@ -551,7 +552,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/animals", isAdmin, async (req, res) => {
     try {
-      const { ownerId, ...validatedData } = insertAnimalSchema.extend({ ownerId: z.string().min(1).max(36).optional() }).parse(req.body);
+      const { ownerId, ...validatedData } = insertAnimalSchema.extend({
+        ownerId: z.string().min(1).max(36).optional(),
+        initialLocationDate: locationDateSchema,
+      }).parse(req.body);
       const animal = await storage.createAnimal(validatedData, ownerId);
       res.status(201).json(animal);
     } catch (error: any) {
@@ -1471,17 +1475,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       switch (type) {
         case "animals": {
-          const validAnimals: InsertAnimal[] = [];
-          const fieldIds = new Set((await storage.getAllFields()).map((field) => field.id));
+          const validAnimals: Array<InsertAnimal & { initialLocationDate: string }> = [];
+          const fieldNames = new Map((await storage.getAllFields()).map((field) => [field.id, field.name]));
           
           for (let i = 0; i < parsed.data.length; i++) {
             const row = parsed.data[i];
             try {
               const csvRow = csvAnimalSchema.parse(row);
-              if ((csvRow.status || "active") === "active" && !csvRow.currentFieldId)
-                throw new Error("Active animals require currentFieldId in the import.");
-              if (csvRow.currentFieldId && !fieldIds.has(csvRow.currentFieldId))
+              if (!csvRow.currentFieldId)
+                throw new Error("Every animal requires currentFieldId in the import.");
+              if (!fieldNames.has(csvRow.currentFieldId))
                 throw new Error("currentFieldId must refer to an existing location.");
+              if (fieldNames.get(csvRow.currentFieldId)?.trim().toLowerCase() === "missing")
+                throw new Error("Choose a location other than Missing.");
+              if (csvRow.status === "inactive" &&
+                (!locationDateSchema.safeParse(csvRow.inactiveSince).success || csvRow.inactiveSince! > locationToday() ||
+                  (csvRow.dateOfBirth && csvRow.inactiveSince! < csvRow.dateOfBirth)))
+                throw new Error("Inactive animals need a valid inactiveSince date on or after birth and no later than today.");
+              requireInitialLocationDate(csvRow.initialLocationDate, csvRow.dateOfBirth, csvRow.inactiveSince);
               
               let sireId: string | undefined;
               let damId: string | undefined;
@@ -1498,13 +1509,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               validAnimals.push({
                 tagNumber: csvRow.tagNumber,
+                initialLocationDate: csvRow.initialLocationDate,
                 type: csvRow.type,
                 sex: csvRow.sex,
                 dateOfBirth: csvRow.dateOfBirth || null,
+                tags: [],
                 sireId: sireId || null,
                 damId: damId || null,
                 currentFieldId: csvRow.currentFieldId || null,
                 status: csvRow.status || "active",
+                inactiveSince: csvRow.status === "inactive" ? csvRow.inactiveSince || null : null,
                 herdName: csvRow.herdName || null,
                 organic: csvRow.organic || false,
                 phenotype: csvRow.phenotype || null,

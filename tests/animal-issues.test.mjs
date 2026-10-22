@@ -9,6 +9,7 @@ test("Animal Issues prioritizes missing DOB and asks for ownership history after
       { id: "b", tagNumber: "11", type: "beef", status: "active", dateOfBirth: null, currentFieldId: null, ownerId: "creamy" },
       { id: "c", tagNumber: "12", type: "beef", status: "sold", dateOfBirth: null, currentFieldId: null, ownerId: null },
       { id: "d", tagNumber: "AI-13", type: " AI ", status: "active", dateOfBirth: null, currentFieldId: null, ownerId: null },
+      { id: "e", tagNumber: "Inactive-14", type: "beef", status: "inactive", dateOfBirth: null, currentFieldId: null, ownerId: null },
     ],
     fields: [{ id: "pasture", name: "Pasture" }, { id: "barn", name: "Dairy Barn" }],
     owners: [{ id: "creamy", name: "Creamy Cow, LLC" }],
@@ -21,10 +22,11 @@ test("Animal Issues prioritizes missing DOB and asks for ownership history after
   const issues = findAnimalIssues(source, "2026-10-21");
   assert.deepEqual(issues.map(({ tagNumber, code }) => [tagNumber, code]), [
     ["10", "currentLocationMismatch"], ["11", "missingBirthDate"], ["11", "unknownLocation"],
+    ["AI-13", "unknownLocation"], ["Inactive-14", "unknownLocation"],
   ]);
   assert.match(issues[0].detail, /Dairy Barn on 2026-10-01/);
   assert.equal(findAnimalIssues(source, "2026-09-15").some((issue) => issue.animalId === "a"), false);
-  assert.equal(issues.some((issue) => issue.animalId === "d"), false);
+  assert.equal(issues.some((issue) => issue.animalId === "c"), false);
   source.animals[1].dateOfBirth = "2020-02-01";
   const afterBirthDate = findAnimalIssues(source, "2026-10-21");
   assert.equal(afterBirthDate.some((issue) => issue.animalId === "b" && issue.code === "missingBirthDate"), false);

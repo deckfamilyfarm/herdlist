@@ -136,6 +136,7 @@ async function main() {
     `Deck Family Farm Grazing / Creamy Cow, LLC - ${firstMonth} to ${month}`,
     "",
     `Total grazing charges: ${money(totalCents)}`,
+    'Note: Animals currently in "Missing" are excluded from animal detail, head-days, and charges.',
     "Month | Animals | Head-days | Charge | Warnings",
     ...items.map((item) => `${item.month} | ${item.contract.rows.length} | ${item.contract.headDays} | ${money(item.contract.amountCents)} | ${item.issues.length}`),
     "",

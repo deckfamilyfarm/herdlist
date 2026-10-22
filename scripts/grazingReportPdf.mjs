@@ -110,6 +110,8 @@ function drawWarnings(doc, issues, month) {
     label(doc, "Records to review", left, 68, width, { bold: true, size: 18 });
     label(doc, `${month} | These warnings did not automatically exclude otherwise eligible grazing days.`,
       left, 96, width, { size: 9, color: muted });
+    label(doc, "A current field may be known even when no dated location is recorded for these days.",
+      left, 108, width, { size: 8, color: muted });
     doc.rect(left, 120, width, 23).fill(pale);
     [["ANIMAL #", left + 6, 82], ["ISSUE", left + 95, 185], ["DATES", left + 292, 165],
       ["DAYS", left + 467, 45]].forEach(([value, x, w]) => label(doc, value, x, 127, w,
@@ -121,7 +123,8 @@ function drawWarnings(doc, issues, month) {
     const rowY = y + 23;
     if (index % 2) doc.rect(left, rowY - 2, width, 23).fill("#f8faf7");
     label(doc, issue.tagNumber, left + 6, rowY + 2, 82, { size: 8 });
-    label(doc, issue.code.replace(/([A-Z])/g, " $1"), left + 95, rowY + 2, 185, { size: 8 });
+    label(doc, issue.code === "unknownLocation" ? "No dated location" : issue.code.replace(/([A-Z])/g, " $1"),
+      left + 95, rowY + 2, 185, { size: 8 });
     label(doc, issue.firstDate === issue.lastDate ? issue.firstDate : `${issue.firstDate} to ${issue.lastDate}`,
       left + 292, rowY + 2, 165, { size: 8 });
     label(doc, issue.days, left + 467, rowY + 2, 45, { size: 8, align: "right" });
@@ -164,6 +167,8 @@ export async function renderGrazingReportPdf({ report, contract, rates, issues, 
     label(doc, name, x + 10, statY + 10, 148, { bold: true, size: 8, color: muted });
     label(doc, value, x + 10, statY + 29, 148, { bold: true, size: 16, color: green });
   });
+  label(doc, 'Note: Animals currently in "Missing" are excluded from detail, head-days, and charges.',
+    left, 211, width, { size: 8, color: muted });
   drawJournal(doc, entries[0], end, 225);
   drawJournal(doc, entries[1], end, 362);
   sectionTitle(doc, "Rate basis", 508);

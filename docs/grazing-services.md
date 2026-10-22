@@ -65,19 +65,24 @@ shorter months. An animal without a usable birth date is assumed to be older
 than one year for dairy age pricing; other ownership and location requirements
 still apply. Movement destinations take effect on
 their recorded calendar date. Days in the selected Dairy Barn field, a field
-named Dairy Barn, or a field named Missing are excluded. A missing movement
-can use the animal's current field, with a warning. Conflicting movements
-remain warnings; their days count when every recorded destination that day is
+named Dairy Barn, or a field named Missing are excluded. An animal whose
+current field is Missing is excluded from every month in the live report,
+including general contracts, even if older movements show a different field.
+A missing movement can use the animal's current field, with a warning that no
+dated location exists for those report days. The warning does not mean the
+animal has no current field.
+Conflicting movements remain warnings; their days count when every recorded destination that day is
 known to be outside Dairy Barn. When the last movement disagrees with the
-current field, the mismatch remains a warning. A known Dairy Barn or Missing
-current field excludes the day. Days with no known location remain uncharged.
+current field, the mismatch remains a warning. A known Dairy Barn current
+field excludes the day. Days with no known location remain uncharged.
 Wet tags and Wet herd membership do not affect billing. Other recorded
 locations, including Main Barn, count.
 
-General contracts count all assigned active days regardless of location, from
-the assignment start through its end date, inclusive. Missing or mismatched
-dated ownership appears as a warning and does not block a charge. A dated sale,
-slaughter, or death event makes that date the last eligible day. An inactive
+General contracts count assigned active days from the assignment start through
+its end date, inclusive, except for animals currently assigned to Missing.
+Missing or mismatched dated ownership appears as a warning and does not block
+a charge. A dated sale, slaughter, or death event makes that date the last
+eligible day. An inactive
 animal without a dated exit is excluded entirely from the monthly report.
 
 If multiple contracts qualify for the same animal-day, it is charged once.

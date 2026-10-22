@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { locationDateSchema } from "./animalLocations";
 
 /* =========================
  * Helpers for DATE columns
@@ -1070,15 +1071,18 @@ export const insertBreedingRecordSchema = createInsertSchema(breedingRecords, {
 
 export const csvAnimalSchema = z.object({
   tagNumber: z.string().min(1),
-  type: z.enum(["dairy", "beef"]).or(z.literal("")),
+  initialLocationDate: locationDateSchema,
+  type: z.enum(["dairy", "beef", "ai"]),
   sex: z
     .enum(["cow", "steer", "stag", "bull", "freemartin"])
-    .or(z.enum(["male", "female"])) // legacy values
-    .or(z.literal("")),
+    .or(z.enum(["male", "female"])), // legacy values
   dateOfBirth: animalDateOfBirth.optional(),
   sireId: z.string().optional(),
   damId: z.string().optional(),
+  sireTag: z.string().optional(),
+  damTag: z.string().optional(),
   currentFieldId: z.string().optional(),
+  inactiveSince: z.string().optional(),
   organic: z
     .string()
     .optional()

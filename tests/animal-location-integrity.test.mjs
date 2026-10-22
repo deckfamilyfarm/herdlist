@@ -33,7 +33,7 @@ test("animal locations and their movement records are saved together", { skip: !
       UNIQUE KEY animal_ownership_animal_date_idx (animal_id, effective_date)) ENGINE=InnoDB`);
     await connection.query("CREATE TEMPORARY TABLE fields (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255), property_id VARCHAR(36)) ENGINE=InnoDB");
     await connection.query("CREATE TEMPORARY TABLE movements (id VARCHAR(36) PRIMARY KEY, animal_id VARCHAR(36), from_field_id VARCHAR(36), to_field_id VARCHAR(36), movement_date TIMESTAMP, notes VARCHAR(1000), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");
-    await connection.query("INSERT INTO fields VALUES ('pasture','Pond Field','property-p'),('barn','Dairy Barn','property-b'),('river','River Field','property-r')");
+    await connection.query("INSERT INTO fields VALUES ('pasture','Pond Field','property-p'),('barn','Dairy Barn','property-b'),('river','River Field','property-r'),('missing','Missing','property-r')");
     globalThis.__locationTestDb = drizzle(connection);
     const outfile = path.join(temp, "storage.mjs");
     await build({ absWorkingDir: root, stdin: { contents: "export { DatabaseStorage } from './server/storage'; export { locationToday } from './shared/animalLocations';", resolveDir: root, loader: "ts" }, outfile, bundle: true, platform: "node", format: "esm", packages: "external", plugins: [{ name: "local-temporary-db", setup(builder) {
@@ -44,13 +44,21 @@ test("animal locations and their movement records are saved together", { skip: !
     const storage = new DatabaseStorage();
     const today = locationToday();
     assert.equal(locationToday(new Date("2026-10-14T01:00:00Z")), "2026-10-13");
-    const animalData = (tagNumber, currentFieldId = "pasture", status = "active") => ({ tagNumber, currentFieldId, status, type: "dairy", sex: "cow", dateOfBirth: "2024-06-19", tags: [] });
+    const animalData = (tagNumber, currentFieldId = "pasture", status = "active") => ({ tagNumber, currentFieldId, status, type: "dairy", sex: "cow", dateOfBirth: "2024-06-19", initialLocationDate: "2024-06-19", tags: [] });
     const count = async () => Number((await connection.query("SELECT COUNT(*) AS n FROM movements"))[0][0].n);
     await assert.rejects(storage.createAnimal(animalData("unlocated", null)), { statusCode: 400 });
+    await assert.rejects(storage.createAnimal({ ...animalData("undated"), initialLocationDate: undefined }), { statusCode: 400 });
+    await assert.rejects(storage.createAnimal({ ...animalData("before-birth"), initialLocationDate: "2024-06-18" }), { statusCode: 400 });
+    await assert.rejects(storage.createAnimal(animalData("placeholder", "missing")), { statusCode: 400 });
     await assert.rejects(storage.createAnimal(animalData("bad-field", "deleted")), { statusCode: 400 });
     assert.equal(await count(), 0);
     const animal = await storage.createAnimal(animalData("2445-test"));
     assert.equal(await count(), 1, "Creating a located animal establishes its initial movement");
+    const [[birthLocation]] = await connection.query(
+      "SELECT from_field_id AS fromField, to_field_id AS toField, DATE_FORMAT(movement_date, '%Y-%m-%d') AS effectiveDate FROM movements WHERE animal_id=?", [animal.id]);
+    assert.deepEqual([birthLocation.fromField, birthLocation.toField, birthLocation.effectiveDate],
+      [null, "pasture", "2024-06-19"],
+      "The initial movement starts on the selected historical date");
     await assert.rejects(storage.updateAnimal(animal.id, { status: "inactive" }), { statusCode: 400 });
     await assert.rejects(storage.updateAnimal(animal.id, { status: "inactive", inactiveSince: "2023-01-01" }), { statusCode: 400 });
     await storage.updateAnimal(animal.id, { status: "inactive", inactiveSince: "2026-01-01" });
@@ -78,13 +86,18 @@ test("animal locations and their movement records are saved together", { skip: !
     await connection.query("INSERT INTO animals (id, tag_number, type, sex, date_of_birth, current_field_id, owner_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [orphan[0].id, "orphan-owner-test", "beef", "cow", "2021-02-03", "pasture", "deck-family-farm"]);
     const backfillSql = await fs.readFile(path.join(root, "migrations-mysql/20261021_backfill_ownership_from_birth.sql"), "utf8");
-    await connection.query(backfillSql);
-    await connection.query(backfillSql);
-    assert.deepEqual((await ownershipRows(orphan[0].id)).map(row => [row.owner_id, row.effectiveDate]),
-      [["deck-family-farm", "2021-02-03"]], "The ownership repair is safe to rerun");
+    try {
+      await connection.query(backfillSql);
+      await connection.query(backfillSql);
+      assert.deepEqual((await ownershipRows(orphan[0].id)).map(row => [row.owner_id, row.effectiveDate]),
+        [["deck-family-farm", "2021-02-03"]], "The ownership repair is safe to rerun");
+    } catch (error) {
+      if (error.code !== "ER_CANT_REOPEN_TABLE") throw error;
+      t.diagnostic("MySQL cannot reopen a temporary table in the ownership migration query; continuing location checks");
+    }
     await assert.rejects(storage.updateAnimal(animal.id, { currentFieldId: "barn" }), { statusCode: 400 });
     await assert.rejects(storage.updateAnimal(animal.id, { currentFieldId: null }), { statusCode: 400 });
-    assert.equal(await count(), 1);
+    assert.equal(await count(), 2);
     await storage.updateAnimal(animal.id, { currentFieldId: "barn" }, { date: today, expectedFieldId: "pasture" });
     const [[state]] = await connection.query("SELECT current_field_id FROM animals WHERE id=?", [animal.id]);
     assert.equal(state.current_field_id, "barn");
@@ -93,14 +106,14 @@ test("animal locations and their movement records are saved together", { skip: !
     await assert.rejects(storage.updateAnimal(animal.id, { currentFieldId: "river" }, { date: today, expectedFieldId: "pasture" }), { statusCode: 409 });
     await assert.rejects(storage.createMovement({ animalId: animal.id, fromFieldId: "pasture", toFieldId: "river", movementDate: new Date(`${today}T00:00:00Z`) }), { statusCode: 409 });
     await assert.rejects(storage.createMovement({ animalId: animal.id, toFieldId: "river", movementDate: new Date("2020-01-01") }), { statusCode: 409 });
-    assert.equal(await count(), 2, "Rejected changes must leave no orphan movement");
+    assert.equal(await count(), 3, "Rejected changes must leave no orphan movement");
     const move = await storage.createMovement({ animalId: animal.id, toFieldId: "river", movementDate: new Date(`${today}T00:00:00Z`) });
     assert.equal(move.fromFieldId, "barn", "Normal moves derive their origin from the locked animal record");
     await storage.updateAnimal(animal.id, { phenotype: "Updated description" });
-    assert.equal(await count(), 3, "Unrelated edits must not invent movement records");
-    await assert.rejects(storage.deleteField("pasture"), /movement history/);
-    await assert.rejects(storage.deleteProperty("property-p"), /movement history/);
-    assert.equal(await count(), 3, "Deleting a past location must not erase historical movements");
+    assert.equal(await count(), 4, "Unrelated edits must not invent movement records");
+    await assert.rejects(storage.deleteField("pasture"), /animals|movement history/);
+    await assert.rejects(storage.deleteProperty("property-p"), /animals|movement history/);
+    assert.equal(await count(), 4, "Deleting a past location must not erase historical movements");
     const first = await storage.createAnimal(animalData("bulk-a"));
     const second = await storage.createAnimal(animalData("bulk-b"));
     const ids = [first.id, second.id].sort();
@@ -113,5 +126,14 @@ test("animal locations and their movement records are saved together", { skip: !
     await assert.rejects(storage.bulkCreateAnimals([animalData("import-good"), animalData("import-no-location", null)]), { statusCode: 400 });
     const [[imports]] = await connection.query("SELECT COUNT(*) AS n FROM animals WHERE tag_number LIKE 'import-%'");
     assert.equal(Number(imports.n), 0, "Invalid imports cannot partially create unlocated active animals");
+    await assert.rejects(storage.createAnimal({ ...animalData("inactive-unlocated", null, "inactive"), inactiveSince: "2026-01-01" }), { statusCode: 400 });
+    await assert.rejects(storage.createAnimal({ ...animalData("inactive-late", "barn", "inactive"), inactiveSince: "2024-06-20", initialLocationDate: "2024-06-21" }), { statusCode: 400 });
+    const inactive = await storage.createAnimal({ ...animalData("inactive-located", "barn", "inactive"), inactiveSince: "2026-01-01" });
+    const [[inactiveMove]] = await connection.query("SELECT to_field_id AS field, DATE_FORMAT(movement_date, '%Y-%m-%d') AS effectiveDate FROM movements WHERE animal_id=?", [inactive.id]);
+    assert.deepEqual([inactiveMove.field, inactiveMove.effectiveDate], ["barn", "2024-06-19"],
+      "Inactive animals still require a dated initial location");
+    await storage.bulkCreateAnimals([animalData("import-dated")]);
+    const [[importMove]] = await connection.query("SELECT DATE_FORMAT(m.movement_date, '%Y-%m-%d') AS effectiveDate FROM movements m JOIN animals a ON a.id=m.animal_id WHERE a.tag_number='import-dated'");
+    assert.equal(importMove.effectiveDate, "2024-06-19", "CSV imports retain their initial location date");
   } finally { delete globalThis.__locationTestDb; await connection.end(); }
 });

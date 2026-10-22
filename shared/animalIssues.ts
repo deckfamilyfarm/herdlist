@@ -45,16 +45,18 @@ export function findAnimalIssues(source: AnimalIssueSource, today: string): Anim
   }
   const issues: AnimalIssue[] = [];
   for (const animal of source.animals) {
-    if (animal.status !== "active" || animal.type.trim().toLowerCase() === "ai") continue;
+    if (animal.status !== "active" && animal.status !== "inactive") continue;
     const currentFieldName = animal.currentFieldId ? fields.get(animal.currentFieldId) || null : null;
     const ownerName = animal.ownerId ? owners.get(animal.ownerId) || null : null;
     const add = (code: AnimalIssueCode, detail: string) => issues.push({
       animalId: animal.id, tagNumber: animal.tagNumber, type: animal.type,
       code, detail, currentFieldName, ownerName,
     });
-    if (!animal.dateOfBirth) add("missingBirthDate", "No date of birth is recorded. Add one before reviewing dated ownership.");
+    if (animal.status === "active" && animal.type.trim().toLowerCase() !== "ai" && !animal.dateOfBirth)
+      add("missingBirthDate", "No date of birth is recorded. Add one before reviewing dated ownership.");
     if (!currentFieldName || currentFieldName.trim().toLowerCase() === "missing")
       add("unknownLocation", "No usable current field is assigned.");
+    if (animal.status !== "active" || animal.type.trim().toLowerCase() === "ai") continue;
     const movement = latestMove.get(animal.id);
     if (currentFieldName && movement && movement.toFieldId !== animal.currentFieldId) {
       const movedTo = movement.toFieldId ? fields.get(movement.toFieldId) : null;

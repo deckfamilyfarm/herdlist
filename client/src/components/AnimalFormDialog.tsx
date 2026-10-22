@@ -32,7 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { InsertAnimal, Animal, Field, Owner, AnimalStatus, PolledStatus } from "@shared/schema";
 import { animalStatusEnum, polledStatusEnum, animalTagOptions } from "@shared/schema";
 import type { LocationChange } from "@shared/animalLocations";
-import { locationToday } from "@shared/animalLocations";
+import { locationDateSchema, locationToday } from "@shared/animalLocations";
 
 interface AnimalFormDialogProps {
   open: boolean;
@@ -77,8 +77,10 @@ const isAllowedAnimalDobYear = (value: string) => {
 export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: AnimalFormDialogProps) {
   const { toast } = useToast();
   const [locationDate, setLocationDate] = useState(locationToday);
+  const [initialLocationDate, setInitialLocationDate] = useState(locationToday);
+  const [initialDateTouched, setInitialDateTouched] = useState(false);
   const [ownerEffectiveDate, setOwnerEffectiveDate] = useState(locationToday);
-  useEffect(() => { if (open) { setLocationDate(locationToday()); setOwnerEffectiveDate(locationToday()); } }, [open]);
+  useEffect(() => { if (open) { setLocationDate(locationToday()); setInitialLocationDate(locationToday()); setInitialDateTouched(false); setOwnerEffectiveDate(locationToday()); } }, [open]);
   const [formData, setFormData] = useState<{
     tagNumber: string;
     type: string;
@@ -176,7 +178,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
   }, [animal, open]);
 
   const createAnimalMutation = useMutation({
-    mutationFn: async (data: InsertAnimal & { ownerId?: string }) => {
+    mutationFn: async (data: InsertAnimal & { initialLocationDate: string; ownerId?: string }) => {
       const res = await apiRequest("POST", "/api/animals", data);
       return res.json();
     },
@@ -247,8 +249,20 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
 
  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.status === "active" && !formData.currentFieldId) {
-      toast({ title: "Location required", description: "Choose a current location for this Active animal.", variant: "destructive" });
+    if ((!animal || formData.status === "active" || formData.status === "inactive") && !formData.currentFieldId) {
+      toast({ title: "Location required", description: "Choose a location for this animal.", variant: "destructive" });
+      return;
+    }
+    if ((!animal || formData.status === "active" || formData.status === "inactive") &&
+      fields.find((field) => field.id === formData.currentFieldId)?.name.trim().toLowerCase() === "missing") {
+      toast({ title: "Location required", description: "Choose a location other than Missing.", variant: "destructive" });
+      return;
+    }
+    if (!animal && (!locationDateSchema.safeParse(initialLocationDate).success ||
+      initialLocationDate > locationToday() ||
+      (formData.dateOfBirth && initialLocationDate < formData.dateOfBirth) ||
+      (formData.status === "inactive" && formData.inactiveSince && initialLocationDate > formData.inactiveSince))) {
+      toast({ title: "Initial location date required", description: "Choose a valid date from birth through today, before any inactive date.", variant: "destructive" });
       return;
     }
     if (formData.status === "inactive" && (!formData.inactiveSince || formData.inactiveSince > locationToday() ||
@@ -269,7 +283,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       tagNumber: formData.tagNumber,
       type: formData.type,
       sex: formData.sex,
-      dateOfBirth: formData.dateOfBirth || undefined,
+      dateOfBirth: formData.dateOfBirth || null,
       sireId: formData.sireId || null,
       damId: formData.damId || null,
       currentFieldId: formData.currentFieldId || null,
@@ -277,7 +291,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
       status: formData.status,
       inactiveSince: formData.status === "inactive" ? formData.inactiveSince : null,
       phenotype: formData.phenotype.trim() || null,
-      betacasein: formData.betacasein || null,
+      betacasein: (formData.betacasein || null) as InsertAnimal["betacasein"],
       polled: formData.polled || "not tested",
       tags: formData.tags,
     };
@@ -297,7 +311,7 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
     if (animal) {
       updateAnimalMutation.mutate(submitData);
     } else {
-      createAnimalMutation.mutate(submitData);
+      createAnimalMutation.mutate({ ...submitData, initialLocationDate });
     }
     onSubmit?.(submitData);
   };
@@ -386,7 +400,10 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               min={MIN_ANIMAL_DOB}
               max={getMaxAnimalDob()}
               value={formData.dateOfBirth}
-              onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, dateOfBirth: e.target.value });
+                if (!animal && !initialDateTouched) setInitialLocationDate(e.target.value || locationToday());
+              }}
               data-testid="input-date-of-birth"
             />
           </div>
@@ -505,9 +522,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
             </Popover>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="currentFieldId">{formData.status === "inactive" ? "Last recorded location" : "Current Location"}{formData.status === "active" ? " *" : ""}</Label>
+            <Label htmlFor="currentFieldId">{formData.status === "inactive" ? "Last recorded location" : "Current Location"}{(!animal || formData.status === "active" || formData.status === "inactive") ? " *" : ""}</Label>
             <Select
-              value={formData.currentFieldId || "none"}
+              value={formData.currentFieldId || (animal && !["active", "inactive"].includes(formData.status) ? "none" : undefined)}
               onValueChange={(value) =>
                 setFormData({ ...formData, currentFieldId: value === "none" ? "" : value })
               }
@@ -516,8 +533,9 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
                 <SelectValue placeholder="Select current field" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Not assigned</SelectItem>
-                {fields.map((f) => (
+                {animal && !["active", "inactive"].includes(formData.status) && <SelectItem value="none">Not assigned</SelectItem>}
+                {fields.filter((field) => field.name.trim().toLowerCase() !== "missing" ||
+                  (animal && !["active", "inactive"].includes(formData.status))).map((f) => (
                   <SelectItem key={f.id} value={f.id}>
                     {f.name}
                   </SelectItem>
@@ -525,6 +543,17 @@ export function AnimalFormDialog({ open, onOpenChange, onSubmit, animal }: Anima
               </SelectContent>
             </Select>
           </div>
+
+          {!animal && <div className="space-y-2">
+            <Label htmlFor="initial-location-date">Initial location date *</Label>
+            <Input id="initial-location-date" type="date" required
+              min={formData.dateOfBirth || undefined}
+              max={formData.status === "inactive" && formData.inactiveSince && formData.inactiveSince < locationToday()
+                ? formData.inactiveSince : locationToday()}
+              value={initialLocationDate}
+              onChange={(event) => { setInitialLocationDate(event.target.value); setInitialDateTouched(true); }} />
+            <p className="text-sm text-muted-foreground">The selected location will be recorded from this date. It defaults to the birth date when one is entered.</p>
+          </div>}
 
           {animal && formData.currentFieldId && formData.currentFieldId !== (animal.currentFieldId || "") && <div className="space-y-2">
             <Label htmlFor="location-effective-date">Location effective date *</Label>

@@ -27,8 +27,12 @@ const CSV_TEMPLATES: Record<string, string[]> = {
     "type",
     "sex",
     "dateOfBirth",
+    "currentFieldId",
+    "initialLocationDate",
     "sireTag",
     "damTag",
+    "status",
+    "inactiveSince",
     "herdName",
     "organic",
     "phenotype",
@@ -56,15 +60,18 @@ const CSV_TEMPLATES: Record<string, string[]> = {
 
 const FORMAT_NOTES: Record<string, string[]> = {
   animals: [
-    "type: dairy or beef",
+    "type: dairy, beef, or ai",
     "sex: cow, bull, steer, stag, freemartin (legacy male->bull, female->cow)",
     "dateOfBirth: YYYY-MM-DD",
+    "currentFieldId: required ID of an existing field other than Missing",
+    "initialLocationDate: required YYYY-MM-DD date when that field became the animal's location (birth date for calves born there)",
+    "status: active or inactive; inactive imports also require inactiveSince (YYYY-MM-DD)",
     "herdName: wet, nurse, finish, main, grafting, or yearlings",
     "organic: true or false",
     "betacasein: A2/A2, A1, or Not Tested",
     "polled: polled, horned, or not tested (true/false accepted)",
     "phenotype: free text",
-    "Use the Movements feature to assign animals to fields",
+    "Use Movements to record later changes of field",
   ],
   properties: [
     "isLeased: yes or no",

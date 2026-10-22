@@ -4,7 +4,7 @@ import type { HistoryEntry, HistoryCorrection } from "../shared/movementHistory"
 import type { LocationChange } from "../shared/animalLocations";
 import { locationToday } from "../shared/animalLocations";
 import { isServiceDate } from "../shared/grazingServices";
-import { locationProblem, recordLocationChange, requireAnimalLocation } from "./animalLocations";
+import { locationProblem, recordLocationChange, requireAnimalLocation, requireInitialLocationDate } from "./animalLocations";
 import { eq, sql, and, or, gte, desc, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 
@@ -419,7 +419,7 @@ const setAnimalRemovalStatus = async (
 
 export interface IStorage {
   // Animals
-  createAnimal(animal: InsertAnimal, ownerId?: string): Promise<Animal>;
+  createAnimal(animal: InsertAnimal & { initialLocationDate: string }, ownerId?: string): Promise<Animal>;
   getAllAnimals(): Promise<AnimalListItem[]>;
   getAnimalById(id: string): Promise<AnimalListItem | undefined>;
   updateAnimal(id: string, animal: Partial<InsertAnimal>, locationChange?: LocationChange, ownerChange?: { ownerId: string; effectiveDate: string }): Promise<Animal | undefined>;
@@ -532,7 +532,7 @@ export interface IStorage {
   removeAnimalsTags(animalIds: string[], tags: string[]): Promise<void>;
 
   // Bulk Import
-  bulkCreateAnimals(animals: InsertAnimal[]): Promise<Animal[]>;
+  bulkCreateAnimals(animals: Array<InsertAnimal & { initialLocationDate: string }>): Promise<Animal[]>;
   bulkCreateProperties(properties: InsertProperty[]): Promise<Property[]>;
   bulkCreateFields(fields: InsertField[]): Promise<Field[]>;
   bulkCreateVaccinations(vaccinations: InsertVaccination[]): Promise<Vaccination[]>;
@@ -566,22 +566,24 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // ---------- Animals ----------
 
-  async createAnimal(animal: InsertAnimal, selectedOwnerId?: string): Promise<Animal> {
+  async createAnimal(animal: InsertAnimal & { initialLocationDate: string }, selectedOwnerId?: string): Promise<Animal> {
     const id = crypto.randomUUID();
     const polledValue = normalizePolledStatus((animal as any).polled);
     const ownerId = selectedOwnerId || (animal.type.trim().toLowerCase() === "dairy" ? "creamy-cow-llc" : "deck-family-farm");
     validateInactiveDate(animal.status ?? "active", animal.inactiveSince, animal.dateOfBirth);
+    const initialDate = requireInitialLocationDate(animal.initialLocationDate, animal.dateOfBirth, animal.inactiveSince);
+    const { initialLocationDate: _initialLocationDate, ...animalValues } = animal;
 
     await db.transaction(async (tx) => {
-      await requireAnimalLocation(tx, animal.status, animal.currentFieldId);
+      await requireAnimalLocation(tx, "active", animal.currentFieldId);
       if (!(await tx.select({ id: owners.id }).from(owners).where(eq(owners.id, ownerId))).length)
         throw locationProblem(400, "Choose a valid owner.");
-      await tx.insert(animals).values({ ...(animal as any), ownerId, polled: polledValue, id });
+      await tx.insert(animals).values({ ...(animalValues as any), ownerId, polled: polledValue, id });
       if (animal.dateOfBirth) await tx.insert(animalOwnership).values({
         id: crypto.randomUUID(), animalId: id, ownerId, effectiveDate: animal.dateOfBirth as any,
       });
-      if (animal.currentFieldId && animal.status !== "inactive") await recordLocationChange(tx, id, null, animal.currentFieldId,
-        new Date(`${locationToday()}T00:00:00Z`), "Initial location recorded when animal was added");
+      await recordLocationChange(tx, id, null, animal.currentFieldId!, initialDate,
+        "Initial location recorded when animal was added");
     });
 
     const [created] = await db.select().from(animals).where(eq(animals.id, id));
@@ -2124,28 +2126,31 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async bulkCreateAnimals(animalList: InsertAnimal[]): Promise<Animal[]> {
+  async bulkCreateAnimals(animalList: Array<InsertAnimal & { initialLocationDate: string }>): Promise<Animal[]> {
     if (animalList.length === 0) return [];
-    const withIds = animalList.map((a) => ({
-      ...(a as any),
-      ownerId: a.type.trim().toLowerCase() === "dairy" ? "creamy-cow-llc" : "deck-family-farm",
-      polled: normalizePolledStatus((a as any).polled),
-      id: crypto.randomUUID(),
-    }));
-    for (const animal of withIds)
-      validateInactiveDate(animal.status ?? "active", animal.inactiveSince, animal.dateOfBirth);
+    const withIds = animalList.map((a) => {
+      const { initialLocationDate, ...values } = a;
+      validateInactiveDate(a.status ?? "active", a.inactiveSince, a.dateOfBirth);
+      return {
+        ...values,
+        initialDate: requireInitialLocationDate(initialLocationDate, a.dateOfBirth, a.inactiveSince),
+        ownerId: a.type.trim().toLowerCase() === "dairy" ? "creamy-cow-llc" : "deck-family-farm",
+        polled: normalizePolledStatus((a as any).polled),
+        id: crypto.randomUUID(),
+      };
+    });
 
     try {
       await db.transaction(async (tx) => {
-        for (const animal of withIds) await requireAnimalLocation(tx, animal.status, animal.currentFieldId);
-        await tx.insert(animals).values(withIds);
+        for (const animal of withIds) await requireAnimalLocation(tx, "active", animal.currentFieldId);
+        await tx.insert(animals).values(withIds.map(({ initialDate: _initialDate, ...animal }) => animal) as any);
         const bornAnimals = withIds.filter((animal) => animal.dateOfBirth);
         if (bornAnimals.length) await tx.insert(animalOwnership).values(bornAnimals.map((animal) => ({
           id: crypto.randomUUID(), animalId: animal.id, ownerId: animal.ownerId,
           effectiveDate: animal.dateOfBirth as any,
         })));
-        for (const animal of withIds) if (animal.currentFieldId && animal.status !== "inactive")
-          await recordLocationChange(tx, animal.id, null, animal.currentFieldId, new Date(`${locationToday()}T00:00:00Z`), "Initial location recorded at import");
+        for (const animal of withIds)
+          await recordLocationChange(tx, animal.id, null, animal.currentFieldId!, animal.initialDate, "Initial location recorded at import");
       });
       return [];
     } catch (err: any) {

@@ -2,18 +2,33 @@ import crypto from "node:crypto";
 import { eq, desc } from "drizzle-orm";
 import { fields, movements } from "@shared/schema";
 import type { db } from "./db";
-import { locationToday } from "../shared/animalLocations";
+import { locationDateSchema, locationToday } from "../shared/animalLocations";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export const locationProblem = (statusCode: number, message: string) => Object.assign(new Error(message), { statusCode });
 
 export async function requireAnimalLocation(tx: Transaction, status: string | undefined, fieldId: string | null | undefined) {
-  if ((status || "active").trim().toLowerCase() === "active" && !fieldId)
-    throw locationProblem(400, "Active animals require a current location. Choose a field before saving.");
+  if (["active", "inactive"].includes((status || "active").trim().toLowerCase()) && !fieldId)
+    throw locationProblem(400, "Animals require a location. Choose a field before saving.");
   if (fieldId) {
-    const [field] = await tx.select({ id: fields.id }).from(fields).where(eq(fields.id, fieldId)).for("update");
+    const [field] = await tx.select({ id: fields.id, name: fields.name }).from(fields).where(eq(fields.id, fieldId)).for("update");
     if (!field) throw locationProblem(400, "Choose an existing current location.");
+    if (["active", "inactive"].includes((status || "active").trim().toLowerCase()) && field.name.trim().toLowerCase() === "missing")
+      throw locationProblem(400, "Choose a location other than Missing.");
   }
+}
+
+export function requireInitialLocationDate(value: string | undefined, birthDate?: string | Date | null,
+  inactiveSince?: string | Date | null): Date {
+  const parsed = locationDateSchema.safeParse(value);
+  if (!parsed.success) throw locationProblem(400, "Choose a valid initial location date.");
+  const day = parsed.data;
+  const birthDay = birthDate instanceof Date ? birthDate.toISOString().slice(0, 10) : birthDate;
+  const inactiveDay = inactiveSince instanceof Date ? inactiveSince.toISOString().slice(0, 10) : inactiveSince;
+  if (day > locationToday()) throw locationProblem(400, "Initial location date cannot be in the future.");
+  if (birthDay && day < birthDay) throw locationProblem(400, "Initial location date cannot precede birth.");
+  if (inactiveDay && day > inactiveDay) throw locationProblem(400, "Initial location date cannot follow the inactive date.");
+  return new Date(`${day}T00:00:00Z`);
 }
 
 export async function recordLocationChange(tx: Transaction, animalId: string, fromFieldId: string | null, toFieldId: string, dateInput: Date, notes: string | null) {

@@ -37,6 +37,8 @@ function summaryHeader(doc, first, last, continuation) {
     { size: 10, color: muted });
   text(doc, "Each following monthly section contains the two proposed GJEs and its animal detail.",
     left, 121, width, { size: 8.5, color: muted });
+  text(doc, 'Note: Animals currently in "Missing" are excluded from every month shown.',
+    left, 134, width, { size: 8, color: muted });
   doc.rect(left, 146, width, 26).fill(pale);
   const cols = [
     ["MONTH", left + 8, 113, "left"],

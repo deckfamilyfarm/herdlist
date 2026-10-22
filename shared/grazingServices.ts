@@ -186,6 +186,9 @@ export function calculateGrazingServices(source: ServiceSource, month: string, t
         (assignments.get(animal.id) || []).some((assignment) => assignment.contractId === contract.id));
     if (!relevant.length) continue;
     if (animal.status !== "active" && !exit && !inactiveSince) continue;
+    // A current Missing field means this animal is excluded from every grazing
+    // contract in this live report, even when older movements show pasture days.
+    if (animal.currentFieldId && fields.get(animal.currentFieldId) === "missing") continue;
     const history = transitionsFor(moves.get(animal.id) || []);
     let locationIndex = -1;
     const ownerHistory = owners.get(animal.id) || [];

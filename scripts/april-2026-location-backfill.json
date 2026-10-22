@@ -1,0 +1,60 @@
+{
+  "reviewedOn": "2026-10-21",
+  "fields": {
+    "dairyBarn": { "id": "a90d6e0f-8876-4eaf-8667-ae7ec20d833e", "name": "Dairy Barn" },
+    "swamp": { "id": "77470b0d-c42f-453d-b706-8059681e501c", "name": "Swamp Field" },
+    "maternityNorth": { "id": "c7ff09a1-8fb5-492f-b795-76c5e9afc643", "name": "Maternity, North" },
+    "backHillside": { "id": "cc3e78c9-aeda-4269-be57-d48480a547e3", "name": "Back Hillside" },
+    "marinaNorth": { "id": "a0b326cb-72cb-4285-82fe-2c0023a70d35", "name": "Marina, North" },
+    "hayfieldNorthwest": { "id": "7824a03a-ee26-4f31-8d2b-562ae5fc9967", "name": "Hayfield-Northwest" }
+  },
+  "animals": [
+    {
+      "id": "92367387-b1bd-4ed5-b169-147b06bd57fa",
+      "tag": "2601",
+      "damId": "826ae36a-b295-406c-aca5-8314ddba5e59",
+      "dob": "2026-02-21",
+      "currentField": "hayfieldNorthwest",
+      "firstRecorded": { "at": "2026-06-16 00:00:00", "from": "swamp", "to": "marinaNorth" },
+      "steps": [
+        { "at": "2026-02-21 12:00:00", "from": null, "to": "dairyBarn", "note": "Dairy Barn from birth per owner 2026-10-21; calf nursed dam Heather in wet herd" },
+        { "at": "2026-05-23 00:00:00", "from": "dairyBarn", "to": "swamp", "note": "Moved with dam Heather from Dairy Barn to Swamp Field; dam movement dated 2026-05-23" }
+      ]
+    },
+    {
+      "id": "ad615b75-5c1f-4d71-b811-6040d49cf96e",
+      "tag": "2602",
+      "damId": "e5a81984-f765-40a2-b86e-8e78511f0bda",
+      "dob": "2026-03-13",
+      "currentField": "hayfieldNorthwest",
+      "firstRecorded": { "at": "2026-05-23 00:00:00", "from": "dairyBarn", "to": "swamp" },
+      "steps": [
+        { "at": "2026-03-13 12:00:00", "from": null, "to": "dairyBarn", "note": "Dairy Barn from birth per owner 2026-10-21; first recorded calf move leaves Dairy Barn" }
+      ]
+    },
+    {
+      "id": "c34400d6-51c2-4812-93d2-4fc2a2aee09d",
+      "tag": "Blossom",
+      "damId": "63fd5ef2-6dae-4911-a769-7daa051bf5c5",
+      "dob": "2026-04-04",
+      "currentField": "hayfieldNorthwest",
+      "firstRecorded": { "at": "2026-05-23 00:00:00", "from": "dairyBarn", "to": "swamp" },
+      "steps": [
+        { "at": "2026-04-04 12:00:00", "from": null, "to": "maternityNorth", "note": "Born in North Maternity per dam Belen's dated note; time orders same-day moves, not a recorded clock time" },
+        { "at": "2026-04-04 12:00:01", "from": "maternityNorth", "to": "dairyBarn", "note": "Brought to Dairy Barn that afternoon per dam Belen's dated note and owner confirmation 2026-10-21; clock time unknown" }
+      ]
+    },
+    {
+      "id": "e245bfc5-3038-41e0-b0c6-7cd03c014311",
+      "tag": "Juju",
+      "damId": "21d5e98a-7f28-4390-8a78-07ef0bf3caf4",
+      "dob": "2026-04-16",
+      "currentField": "hayfieldNorthwest",
+      "firstRecorded": { "at": "2026-05-23 00:00:00", "from": "dairyBarn", "to": "swamp" },
+      "steps": [
+        { "at": "2026-04-16 12:00:00", "from": null, "to": "backHillside", "note": "Born on Back Hillside per dam Josephina's dated note; time orders same-day moves, not a recorded clock time" },
+        { "at": "2026-04-16 12:00:01", "from": "backHillside", "to": "dairyBarn", "note": "Brought to wet herd and Dairy Barn that afternoon per dated note and owner confirmation 2026-10-21; clock time unknown" }
+      ]
+    }
+  ]
+}

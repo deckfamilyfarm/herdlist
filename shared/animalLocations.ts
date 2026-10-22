@@ -1,10 +1,12 @@
 import { z } from "zod";
 
+export const locationDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((day) => {
+  const date = new Date(`${day}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === day;
+}, "Choose a valid location date");
+
 export const locationChangeSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((day) => {
-    const date = new Date(`${day}T00:00:00Z`);
-    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === day;
-  }, "Choose a valid location date"),
+  date: locationDateSchema,
   expectedFieldId: z.string().min(1).max(36).nullable(),
 }).strict();
 export type LocationChange = z.infer<typeof locationChangeSchema>;
